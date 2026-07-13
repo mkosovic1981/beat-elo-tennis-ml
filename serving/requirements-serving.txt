@@ -1,0 +1,30 @@
+# GRU serving pipeline — pinned dependencies.
+#
+# Deliberately excludes `torch` — serving runs on ONNX Runtime only (~19MB
+# wheel vs. torch-CPU's ~150-200MB), which matters on Vercel's Python
+# function size limits. `onnxruntime` (the Python package), NOT
+# `onnxruntime-node` — the Node.js binding is the one with documented Vercel
+# native-`.so`-bundling fragility; the plain Python wheel has no such
+# native-addon dependency.
+#
+# scikit-learn is pinned to the EXACT version the isotonic calibrator
+# (exp_c3_isotonic.pkl) was trained/pickled with — never "latest" for the
+# serving environment (a newer sklearn can fail or silently misbehave when
+# unpickling an older isotonic-regression model).
+#
+# Local-dev-only extras (SqlServerRawMatchSource, --source sql): `python-tds`
+# is a pure-Python TDS driver (no ODBC install required) — used ONLY by
+# `serving/data_source.py::SqlServerRawMatchSource` for local testing. The
+# production path (`--source php`) never imports it and never touches SQL
+# Server directly.
+
+onnxruntime==1.27.0
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.4.2
+requests==2.32.4
+psycopg2-binary==2.9.12
+
+# Local-only (direct SQL Server read for `--source sql` testing) — NOT needed
+# by api/cron/gru-precompute.py in production (that path uses PhpRawMatchSource).
+python-tds==1.17.1

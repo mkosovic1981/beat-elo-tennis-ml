@@ -1,0 +1,13 @@
+{
+  "name": "ml-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-only data export scripts for the ML win-probability project. Never deployed.",
+  "type": "module",
+  "scripts": {
+    "export": "node scripts/export_data.mjs"
+  },
+  "dependencies": {
+    "mssql": "^12.2.0"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "model_version": "exp_c3_v1",
+  "hyperparams": {
+    "hidden_size": 24,
+    "dropout": 0.3,
+    "weight_decay": 0.0001,
+    "lr": 0.002,
+    "batch_size": 512,
+    "max_len": 24,
+    "n_feats": 9,
+    "n_head": 15,
+    "random_state": 42
+  },
+  "scaling": {
+    "setmargin_scale": 12.0,
+    "daysrest_clip": 90.0,
+    "ligakoef_scale": 7.0,
+    "elo_mean": 1461.839667775609,
+    "elo_std": 265.507889662922,
+    "age_mean": 37.90599637538413,
+    "age_std": 10.2390968143448,
+    "matchcount_scale": 100.0,
+    "h2htotal_scale": 10.0,
+    "h2h_setsmargin_scale": 20.0,
+    "text_skill_neutral": 0.0
+  },
+  "step_feature_names": [
+    "Won",
+    "SetMarginScaled",
+    "DaysRestScaled",
+    "LigaKoefScaled",
+    "HomeShareBefore",
+    "OpponentCareerWinRateBefore",
+    "OppEloBeforeScaled (NEW)",
+    "WasH2H (NEW)",
+    "IsPlaceholder"
+  ],
+  "head_feature_names": [
+    "elo_p_scaled",
+    "elo_o_scaled",
+    "cwr_p",
+    "cwr_o",
+    "forma_p",
+    "forma_o",
+    "mc_p",
+    "mc_o",
+    "age_p",
+    "age_o",
+    "text_p",
+    "text_o",
+    "h2h_wr",
+    "h2h_total_scaled",
+    "h2h_sets_margin_scaled"
+  ],
+  "calibration": {
+    "method": "isotonic",
+    "temperature": 0.8929733037948608
+  },
+  "test_metrics": {
+    "experiment": "Exp C3 - enriched GRU (calibrated)",
+    "accuracy": 0.7644483362521891,
+    "brier": 0.15868946215477792,
+    "log_loss": 0.4930094604426537,
+    "auc": 0.8501621643358419
+  }
+}

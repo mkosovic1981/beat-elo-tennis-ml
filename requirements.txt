@@ -1,0 +1,10 @@
+pandas
+numpy
+scikit-learn
+xgboost
+jupyterlab
+matplotlib
+
+# Experiment C — GRU "neural ELO" sequence model (05_gru_neural_elo.ipynb).
+# CPU build: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch

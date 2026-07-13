@@ -1,0 +1,31 @@
+# Local-only DB config — never commit real credentials
+db-config.json
+scripts/db-config.json
+
+# Environment files
+.env
+.env.*
+
+# Raw data exports (real player IDs / match data / PII) — keep only the README
+data/*.csv
+data/*.parquet
+data/*.json
+data/*.jsonl
+data/*.log
+!data/README.md
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+
+# Trained model artifacts (regenerable from training) — only chart PNGs are
+# committed under models/. Does NOT match serving/models/*.pkl (the shipped
+# ONNX/isotonic-calibrator serving artifacts, which are intentionally committed).
+models/*.pkl
+models/*.pt
