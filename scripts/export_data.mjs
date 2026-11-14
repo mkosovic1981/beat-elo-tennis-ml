@@ -14,7 +14,12 @@ import sql from 'mssql';
 import { createWriteStream } from 'node:fs';
 import { readFileSync } from 'node:fs';
 
-const cfg = JSON.parse(readFileSync(new URL('./db-config.json', import.meta.url)));
+// Overridable so the raw (PII) export can be written OUTSIDE this repository:
+//   DB_CONFIG=/path/db-config.json  OUT_PATH=/path/matches_export_raw.csv  node export_data.mjs
+// The raw export holds real IgracIds + Godiste -> pseudonymise with anonimiziraj.py immediately.
+// Free text (Trenutci) and DatumRodjenja are NOT written unless WITH_TEXT=1.
+const cfgPath = process.env.DB_CONFIG ? process.env.DB_CONFIG : new URL('./db-config.json', import.meta.url);
+const cfg = JSON.parse(readFileSync(cfgPath));
 const config = {
   server: cfg.server, port: cfg.port, database: cfg.database,
   user: cfg.user, password: cfg.password, options: cfg.options,
@@ -178,8 +183,10 @@ const elapsedMs = Date.now() - t0;
 console.log(`Query finished in ${(elapsedMs / 1000).toFixed(1)}s. Rows: ${result.recordset.length}`);
 
 const rows = result.recordset;
-const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-const outPath = new URL('../data/matches_export.csv', import.meta.url);
+const withText = process.env.WITH_TEXT === '1';
+const columns = (rows.length > 0 ? Object.keys(rows[0]) : [])
+  .filter((c) => withText || !/Trenutci|DatumRodjenja/.test(c));
+const outPath = process.env.OUT_PATH ? process.env.OUT_PATH : new URL('../data/matches_export.csv', import.meta.url);
 const stream = createWriteStream(outPath);
 stream.write(columns.join(',') + '\n');
 for (const row of rows) {
@@ -190,5 +197,5 @@ stream.end();
 await new Promise((resolve) => stream.on('finish', resolve));
 await pool.close();
 
-console.log(`Wrote ${rows.length} rows, ${columns.length} columns to ${outPath.pathname}`);
+console.log(`Wrote ${rows.length} rows, ${columns.length} columns to ${outPath.pathname ?? outPath}`);
 console.log('Columns:', columns.join(', '));

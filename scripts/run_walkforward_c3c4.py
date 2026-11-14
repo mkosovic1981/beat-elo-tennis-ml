@@ -326,6 +326,7 @@ def fit_gru_enriched_fold(core_ids, eval_ids, calib_ids, test_ids, include_text,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--folds', type=str, default='1,2,3,4')
+    parser.add_argument('--skip-c4', action='store_true', help='skip Exp C4 (needs trenutci_scores.csv)')
     parser.add_argument('--out', type=str, default=str(DATA_DIR / 'walkforward_c3c4_results.json'))
     args = parser.parse_args()
     fold_nums = [int(x) for x in args.folds.split(',')]
@@ -370,14 +371,16 @@ def main():
         print(f"  ExpC3 (enriched GRU)    brier={mC3['brier']:.5f}  acc={mC3['accuracy']:.4f}  "
               f"({time.time() - t0:.1f}s elapsed)", flush=True)
 
-        pC4, yC4 = fit_gru_enriched_fold(core_ids, eval_ids, calib_ids, test_ids, include_text=True)
-        mC4 = compute_metrics_dict(yC4, pC4)
-        print(f"  ExpC4 (enriched+text)   brier={mC4['brier']:.5f}  acc={mC4['accuracy']:.4f}  "
-              f"({time.time() - t0:.1f}s elapsed)", flush=True)
+        exps = [(m0, 'Exp 0 - ELO baseline'), (mB, "Exp B' - ELO-incl XGB + trajectory"),
+                (mC2, 'Exp C2 - GRU + ELO'), (mC3, 'Exp C3 - enriched GRU')]
+        if not args.skip_c4:
+            pC4, yC4 = fit_gru_enriched_fold(core_ids, eval_ids, calib_ids, test_ids, include_text=True)
+            mC4 = compute_metrics_dict(yC4, pC4)
+            print(f"  ExpC4 (enriched+text)   brier={mC4['brier']:.5f}  acc={mC4['accuracy']:.4f}  "
+                  f"({time.time() - t0:.1f}s elapsed)", flush=True)
+            exps.append((mC4, 'Exp C4 - enriched GRU + text'))
 
-        for m, expname in [(m0, 'Exp 0 - ELO baseline'), (mB, "Exp B' - ELO-incl XGB + trajectory"),
-                            (mC2, 'Exp C2 - GRU + ELO'), (mC3, 'Exp C3 - enriched GRU'),
-                            (mC4, 'Exp C4 - enriched GRU + text')]:
+        for m, expname in exps:
             results.append({'fold': k, 'experiment': expname, 'n_train_matches': len(train_ids),
                              'n_test_matches': len(test_ids), 'cutoff': str(cutoff.date()), **m})
 

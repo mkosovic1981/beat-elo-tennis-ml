@@ -179,3 +179,27 @@ All passed:
   rows and excludes both the 4 Masters and 3 friendly matches.
 - **`IgracPar=0` enforcement:** spot-checked 5 known pair IDs (`IgracPar=1`,
   e.g. a known doubles pair) — all confirmed absent from the export.
+
+## Refreshing the dataset (pseudonymised workflow)
+
+The raw export contains real player IDs and birth years and must never be written inside this
+repository. Pipeline used for refreshes:
+
+```bash
+cd scripts
+# 1. read-only export -> raw CSV OUTSIDE the repo (free text / DatumRodjenja are not exported)
+DB_CONFIG=/path/db-config.json OUT_PATH=/private/dir/matches_export_raw.csv node export_data.mjs
+# 2. pseudonymise (ids -> 100001+, birth year -> age at match year; the id map stays private
+#    and is extended in place for new players)
+python anonimiziraj.py --raw /private/dir/matches_export_raw.csv \
+    --map /private/dir/_pseudonim_mapa.json --out /private/dir/anon/matches_export.csv
+# 3. rebuild features + all experiments in a throw-away workspace (notebooks stay output-free)
+python run_pipeline.py --matches /private/dir/anon/matches_export.csv \
+    --workdir /private/dir/run --notebooks 02 03 05 07 08 10
+python /private/dir/run/scripts/run_walkforward_c3c4.py --skip-c4   # 4-fold walk-forward
+```
+
+Notebook 02 accepts either the raw columns (`WinnerGodiste`/`LoserGodiste`) or the pseudonymised
+`WinnerAge`/`LoserAge`. Exp C4 needs the Gemini free-text scores (`trenutci_scores.csv`), which
+are only available for the July 2026 snapshot; `--skip-c4` skips it. Enable the pre-commit hook
+that strips notebook outputs once per clone: `git config core.hooksPath .githooks`.

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Strip outputs from staged notebooks before commit (enable once: git config core.hooksPath .githooks)
+files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.ipynb$')
+[ -z "$files" ] && exit 0
+python -I scripts/strip_notebook_outputs.py $files && git add $files

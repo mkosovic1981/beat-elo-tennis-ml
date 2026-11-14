@@ -322,7 +322,11 @@ def load_common():
 
     # text-skill raw lookups (has_text / confidence are fold-independent; skill_1_10 scaling
     # constant IS fold-train dependent -- computed per fold in run_walkforward_c3c4.py)
-    scores = pd.read_csv(DATA_DIR / 'trenutci_scores.csv')[['IgracId', 'skill_1_10', 'confidence']]
+    scores_path = DATA_DIR / 'trenutci_scores.csv'
+    if scores_path.exists():
+        scores = pd.read_csv(scores_path)[['IgracId', 'skill_1_10', 'confidence']]
+    else:  # no free-text scores for this dataset (e.g. the Nov-2026 export) -> Exp C4 is skipped
+        scores = pd.DataFrame({'IgracId': [], 'skill_1_10': [], 'confidence': []})
     skill_lookup = scores.set_index('IgracId')['skill_1_10'].to_dict()
     conf_lookup = scores.set_index('IgracId')['confidence'].to_dict()
     for who, id_col in [('p', 'PlayerId'), ('o', 'OpponentId')]:

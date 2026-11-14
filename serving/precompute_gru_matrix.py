@@ -202,6 +202,16 @@ def build_matrix(roster: list[dict], player_log, first_idx, count_idx, step_feat
     return rows
 
 
+# psycopg2.extras.execute_values' own `page_size` defaults to 100. With ~250k pairs that is
+# ~2,500 sequential network round trips to the database from a serverless function in a
+# different region -- at ~100 ms each that alone eats almost the whole 300 s duration cap.
+UPSERT_PAGE_SIZE = 5000
+# Commit in outer chunks so a duration-cap kill mid-run leaves whatever was already committed
+# intact instead of losing the whole night's work to one giant implicit rollback (defence in
+# depth on top of the page_size fix above, not a replacement for it).
+UPSERT_COMMIT_CHUNK = 25000
+
+
 def upsert_rows(database_url: str, rows: list[dict], model_version: str, sezona_id: int | None) -> int:
     import psycopg2
     import psycopg2.extras
@@ -209,31 +219,36 @@ def upsert_rows(database_url: str, rows: list[dict], model_version: str, sezona_
     if not rows:
         return 0
 
+    sql = """
+        INSERT INTO gru_win_prob (igrac_a_id, igrac_b_id, prob_a_wins, model_version, sezona_id, computed_at)
+        VALUES %s
+        ON CONFLICT (igrac_a_id, igrac_b_id)
+        DO UPDATE SET prob_a_wins = EXCLUDED.prob_a_wins,
+                      model_version = EXCLUDED.model_version,
+                      sezona_id = EXCLUDED.sezona_id,
+                      computed_at = NOW()
+    """
+
     conn = psycopg2.connect(database_url)
+    written = 0
     try:
-        with conn.cursor() as cur:
+        for chunk_start in range(0, len(rows), UPSERT_COMMIT_CHUNK):
+            chunk = rows[chunk_start:chunk_start + UPSERT_COMMIT_CHUNK]
             values = [
                 (r['igrac_a_id'], r['igrac_b_id'], r['prob_a_wins'], model_version, sezona_id)
-                for r in rows
+                for r in chunk
             ]
-            psycopg2.extras.execute_values(
-                cur,
-                """
-                INSERT INTO gru_win_prob (igrac_a_id, igrac_b_id, prob_a_wins, model_version, sezona_id, computed_at)
-                VALUES %s
-                ON CONFLICT (igrac_a_id, igrac_b_id)
-                DO UPDATE SET prob_a_wins = EXCLUDED.prob_a_wins,
-                              model_version = EXCLUDED.model_version,
-                              sezona_id = EXCLUDED.sezona_id,
-                              computed_at = NOW()
-                """,
-                values,
-                template='(%s, %s, %s, %s, %s, NOW())',
-            )
-        conn.commit()
+            with conn.cursor() as cur:
+                psycopg2.extras.execute_values(
+                    cur, sql, values,
+                    template='(%s, %s, %s, %s, %s, NOW())',
+                    page_size=UPSERT_PAGE_SIZE,
+                )
+            conn.commit()
+            written += len(chunk)
     finally:
         conn.close()
-    return len(rows)
+    return written
 
 
 def run_precompute(
