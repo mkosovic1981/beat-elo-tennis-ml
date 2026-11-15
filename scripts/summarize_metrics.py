@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
 MODELS = [  # (label, file, column)
@@ -24,6 +25,21 @@ MODELS = [  # (label, file, column)
     ('Exp C3', 'test_predictions_c3', None),
     ('Exp C4', 'test_predictions_c4', None),
 ]
+
+
+def corp(p, y):
+    """CORP decomposition (Dimitriadis, Gneiting, Jordan 2021): Brier = MCB - DSC + UNC."""
+    c = IsotonicRegression(y_min=0, y_max=1, out_of_bounds='clip').fit(p, y).predict(p)
+    bs = np.mean((p - y) ** 2)
+    bs_c = np.mean((c - y) ** 2)
+    bs_r = np.mean((y.mean() - y) ** 2)
+    return bs - bs_c, bs_r - bs_c, bs_r  # MCB, DSC, UNC
+
+
+def ece_pp(p, y, bins=10):
+    """ECE in percentage points, equal-mass bins, weighted."""
+    o = np.argsort(p, kind='stable')
+    return float(sum(len(i) / len(p) * abs(p[i].mean() - y[i].mean()) for i in np.array_split(o, bins)) * 100)
 
 
 def main():
@@ -55,14 +71,33 @@ def main():
     def brier_boot(p):
         return np.array([np.mean((p[b] - y[b]) ** 2) for b in boots])
     bb = {k: brier_boot(p) for k, p in preds.items()}
+    cp = {k: corp(p, y) for k, p in preds.items()}
+    # T13 self-check
+    assert len(y) == 2 * n, ('rows != 2 x matches', len(y), n)
+    for k, p in preds.items():
+        mcb, dsc, unc = cp[k]
+        assert abs(mcb - dsc + unc - np.mean((p - y) ** 2)) < 1e-9, (k, 'CORP identity')
+        assert abs(unc - 0.25) < 1e-9, (k, 'UNC', unc)
+    print('T13 self-check: PASS (CORP identity < 1e-9, UNC = 0.25, rows = 2 x matches)')
+    def corp_boot(p):
+        r = np.array([corp(p[b], y[b]) for b in boots])
+        return r[:, 0], r[:, 1]
+    cb = {k: corp_boot(p) for k, p in preds.items() if k in ('Exp 0 ELO', 'Exp C3', 'Exp C2')}
     out = []
     for k, p in preds.items():
         row = dict(model=k, brier=float(brier_score_loss(y, p)), logloss=float(log_loss(y, np.clip(p, 1e-7, 1 - 1e-7))),
-                   acc=float(accuracy_score(y, p > 0.5)), auc=float(roc_auc_score(y, p)))
+                   acc=float(accuracy_score(y, p > 0.5)), auc=float(roc_auc_score(y, p)),
+                   ece_pp=ece_pp(p, y), mcb=float(cp[k][0]), dsc=float(cp[k][1]), unc=float(cp[k][2]))
         for ref in ('Exp 0 ELO', 'Exp C3'):
             if ref in bb and k != ref:
                 dd = bb[k] - bb[ref]
                 row[f'dBrier_vs_{ref}'] = [float(np.mean(dd)), float(np.percentile(dd, 2.5)), float(np.percentile(dd, 97.5))]
+        if k in cb:
+            for ref in ('Exp 0 ELO', 'Exp C3'):
+                if ref in cb and k != ref:
+                    for i, nm in enumerate(('dMCB', 'dDSC')):
+                        dd = cb[k][i] - cb[ref][i]
+                        row[f'{nm}_vs_{ref}'] = [float(np.mean(dd)), float(np.percentile(dd, 2.5)), float(np.percentile(dd, 97.5))]
         out.append(row)
     print(pd.DataFrame([{k: v for k, v in r.items() if not isinstance(v, list)} for r in out]).round(4).to_string(index=False))
     for r in out:
