@@ -8,6 +8,37 @@ an enriched GRU sequence model — say yes, and pin down exactly where ELO still
 
 **The thesis question: can a model beat ELO without ever using the ELO number as a feature? Yes.**
 
+### Latest (November 2026 snapshot, 4-fold walk-forward, 14,428 matches)
+
+Re-evaluated on a newer data snapshot with pooled walk-forward folds (notebooks 14–16):
+
+| Model | Brier ↓ | % vs ELO | Accuracy ↑ |
+|---|---|---|---|
+| ELO baseline | 0.17633 | — | 74.88% |
+| C3 raw (production) | 0.15940 | 9.6% | 76.33% |
+| C3 ensemble raw (5 seeds) | 0.15847 | 10.1% | 76.60% |
+| TabPFN v2 (zero-shot, no training) | 0.16219 | 8.0% | 75.66% |
+| XGBoost B′ | 0.16405 | 7.0% | 75.52% |
+| **Best blend: 0.5·C3 ensemble + 0.5·TabPFN v2** | **0.15733** | **10.8%** | 76.58% |
+| 0.5·C3 ensemble raw + 0.5·XGBoost B′ | 0.15774 | 10.5% | 76.65% |
+
+Research-only footnote: TabPFN-3.5 reaches Brier 0.16088 (8.8% vs ELO) but its license is
+non-commercial, so it is not used beyond comparison.
+
+Blending a sequence GRU with a tabular model is the best result (~10.5–10.8% Brier improvement
+over ELO, significant versus the GRU ensemble alone). TabPFN used zero-shot, with no training,
+comes within ~1% of the trained GRU. Accuracy differs little among the top models (~76.5%), while
+Brier and AUC are what separate them. Details: [Exp D — TabPFN v2](#exp-d--tabpfn-v2-zero-shot-no-training),
+[TabPFN-3.5](#exp-d--tabpfn-35-comparison-research-only),
+[Blending](#blending-the-gru-with-tabular-models), notebooks 14, 15 and 16.
+
+> **Note:** the November and July snapshots are **not directly comparable** — different data
+> snapshot and a different test setup (4-fold walk-forward vs. a single test split).
+
+### July 2026 snapshot (single test split)
+
+The original thesis results, kept as published:
+
 - **Thesis result — Exp C, the ELO-free GRU (never sees ELO anywhere in its input):** trained
   purely on each player's raw match-history sequence (win/loss, set margin, rest days, razina,
   home-court share, opponent quality-at-the-time — no `EloBefore`/`EloAfter`, ever), it still beats
@@ -28,8 +59,8 @@ an enriched GRU sequence model — say yes, and pin down exactly where ELO still
 | **Exp C — ELO-free GRU (thesis answer)** | ❌ | 0.1628 (−8.1%) | 76.21% (+1.03 pp) | 84.11% (+2.01 pp / +2.4% naive / +6.3% above-chance) |
 | **Exp C3 — enriched GRU (best overall)** | ✅ | 0.1587 (−10.4%) | 76.44% (+1.26 pp) | 85.02% (+2.91 pp / +3.5% naive / +9.1% above-chance) |
 
-Both results hold up not just on one test split but across 4 independent walk-forward time
-periods (see Results below).
+*(July 2026 snapshot.)* Both results hold up not just on one test split but across 4 independent
+walk-forward time periods (see Results below).
 
 ![Accuracy by player experience](models/learning_curve_accuracy_by_experience.png)
 ![Brier score by player experience](models/learning_curve_brier_by_experience.png)
