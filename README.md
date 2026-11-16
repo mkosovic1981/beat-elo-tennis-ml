@@ -1,21 +1,13 @@
 # Beating ELO With Raw Match History: Win-Probability Models for Tenis Liga Split
 
-**Contents:** [Abstract](#abstract) · [1 Introduction](#1-introduction) · [2 Data](#2-data) ·
-[3 Methods](#3-methods) · [4 Results](#4-results) · [5 Discussion](#5-discussion) ·
-[6 Conclusion](#6-conclusion) · [References](#references) · [Appendix A Notebooks](#appendix-a-notebooks) ·
-[B Figures](#appendix-b-additional-figures) · [C Layout](#appendix-c-repository-layout) ·
-[D Serving](#appendix-d-serving) · [E Reproduction](#appendix-e-reproducing-the-results) ·
-[F Data and licences](#appendix-f-data-and-licence-notes)
+**Marin Kosović**, PhD · Split, Croatia · ORCID [0000-0003-3149-4288](https://orcid.org/0000-0003-3149-4288)
 
-This is a standalone research project with its own dependencies (`requirements.txt` for the
-notebooks, `package.json` for the Node.js export scripts). It grew out of statistics work for the
-club-management app of a real recreational league, but every notebook and script reads only
-exported files under `data/`; nothing imports from outside this repository.
+November 2026
 
 ## Abstract
 
 Rating systems such as ELO convert match history into win probabilities. This study asks whether
-learned models can outperform the incumbent ELO of Tenis Liga Split, a recreational tennis league
+learned models can outperform the league's existing ELO rating system at Tenis Liga Split, a recreational tennis league
 (singles, about 18k matches since 2017, pseudonymized), and whether they can do so without ELO as an
 input. Leakage-safe point-in-time features, 4-fold walk-forward validation (14,428 pooled test
 matches) and a paired match-level bootstrap are used to compare ELO, XGBoost, two-tower GRU sequence
@@ -46,6 +38,13 @@ output; ELO is shown both ways. TabPFN-3.5 is research-only (non-commercial lice
 
 **Figure 1.** Pooled Brier score with 95% match-level bootstrap intervals for single models
 (Table 2); lower is better.
+
+**Contents:** [Abstract](#abstract) · [1 Introduction](#1-introduction) · [2 Data](#2-data) ·
+[3 Methods](#3-methods) · [4 Results](#4-results) · [5 Discussion](#5-discussion) ·
+[6 Conclusion](#6-conclusion) · [References](#references) · [Appendix A Notebooks](#appendix-a-notebooks) ·
+[B Figures](#appendix-b-additional-figures) · [C Layout](#appendix-c-repository-layout) ·
+[D Serving](#appendix-d-serving) · [E Reproduction](#appendix-e-reproducing-the-results) ·
+[F Data and licences](#appendix-f-data-and-licence-notes)
 
 ## 1 Introduction
 
@@ -552,6 +551,8 @@ player-comparison feature in the private club app the data comes from; that app 
 private codebase and not part of this repo.
 
 ## Appendix E. Reproducing the results
+
+The repository is a standalone research project with its own dependencies (`requirements.txt` for the notebooks, `package.json` for the Node.js export scripts). It grew out of statistics work for the club-management app of a real recreational league, but every notebook and script reads only exported files under `data/`; nothing imports from outside this repository.
 
 ### Data export (Node.js, requires DB access)
 
