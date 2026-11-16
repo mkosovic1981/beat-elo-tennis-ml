@@ -212,6 +212,66 @@ merely mostly robust, or fully robust?" question the first walk-forward pass (`0
 top model" of that lineup, but still lost to B′ in fold 1. `12`'s 5-model pass is the one that
 should be treated as authoritative going forward.)
 
+## Exp D — TabPFN v2 (zero-shot, no training)
+
+**Important: these numbers are NOT comparable with the tables above.** The tables above come from the
+original July 2026 snapshot (17,128 matches, split 2025-01-19, C3 Brier 0.1587). Exp D was run on a
+newer, refreshed and anonymized export (split 2025-06-06, **3,607 test matches** / 7,214 duplicate-and-flip
+rows in the main split, 4 walk-forward folds), where the baselines were re-run on the same matches. The
+ELO and C3 reference values below are from that newer set.
+
+Question: can a pretrained tabular foundation model — **TabPFN v2**, used purely in-context with
+**no training or fine-tuning** — match the purpose-built GRU? The training matches (the most recent 10,000
+rows, or a random 10,000 for comparison) are given to the model as context, and it predicts the test
+matches in a single forward pass. v2 limits the context to ~10k rows; using the most recent 10k worked
+better than a random 10k. Predictions are symmetrized over both players' perspectives and isotonic-calibrated.
+
+| Model (new snapshot, main split) | Brier ↓ | Paired ΔBrier vs ELO (95% CI) | Paired ΔBrier vs C3 (95% CI) |
+|---|---|---|---|
+| ELO baseline | 0.1825 | — | — |
+| D-A′ — TabPFN, ELO-free features | ≈ ELO (0.1831) | +0.0006 [−0.0055, +0.0070] | — |
+| **D-B′ — TabPFN, with ELO** (mean of 3 seeds' predictions = ensemble, last-10k context) | **0.1686** | **−0.0139 [−0.0176, −0.0103]** | +0.0017 [−0.0019, +0.0052] |
+| C3 — enriched GRU (single seed) | 0.1669 | — | — |
+| C3 — 5-seed ensemble | 0.1651 | — | — |
+
+Walk-forward (4 expanding folds, mean Brier): ELO 0.1763, C3 0.1601, **TabPFN D-B′ 0.1622**. TabPFN beats
+ELO in 4/4 folds but beats the single-seed C3 in only 1/4; pooled over all folds it is slightly behind C3
+(ΔBrier +0.0021, 95% CI [+0.0003, +0.0038]).
+
+**Takeaway:** a pretrained model with zero training lands **about 1% (Brier) behind the tuned GRU and
+significantly ahead of ELO**; without ELO as a feature (D-A′) it gives no gain over ELO. It did not beat
+C3, so C3 remains the model used for serving. The honest limitation is the ~10k-row context ceiling of
+v2. Full analysis, including breakdowns by gender and by length of absence, in
+`notebooks/14_exp_d_tabpfn_v2.ipynb`.
+
+## Exp D — TabPFN-3.5 comparison (research-only)
+
+**As above, these numbers are on the newer anonymized snapshot (split 2025-06-06), not the July 2026
+one, so they are not comparable with the tables in the first sections.** Same protocol as Exp D (v2):
+no training, the most recent training rows as in-context data, symmetrized over both players'
+perspectives, isotonic calibration, paired bootstrap per match (2,000 resamples, seed 42). Walk-forward,
+4 expanding folds, pooled over 14,428 test matches (Brier, 95% CI; ΔBrier is paired vs C3):
+
+| Model | Brier ↓ | ΔBrier vs C3 |
+|---|---|---|
+| C3 — 5-seed ensemble | 0.15889 [0.15549, 0.16220] | −0.00120 [−0.00166, −0.00074] |
+| C3 — enriched GRU (single seed) | 0.16009 [0.15665, 0.16350] | — |
+| **TabPFN-3.5 (B′ features, full context)** | **0.16088** [0.15756, 0.16422] | +0.00074 [−0.00106, +0.00245] |
+| TabPFN v2 (B′ features, 10k context) | 0.16219 [0.15890, 0.16551] | +0.00207 [+0.00029, +0.00379] |
+| ELO baseline | 0.17633 [0.17369, 0.17891] | +0.01623 [+0.01424, +0.01819] |
+
+**Takeaway:** TabPFN-3.5, with no training at all, reaches the single-seed GRU (the difference is
+statistically indistinguishable from zero) and is better than TabPFN v2 (pooled ΔBrier −0.0013, 95% CI
+[−0.0024, −0.0003]). It is also the best calibrated model (ECE on the main split: 1.90 pp vs 2.95 for v2,
+3.67 for C3, 5.71 for ELO). The gain over v2 is a model effect, not a context-size effect: with the same
+10k context the improvement is still −0.0031, while giving 3.5 its full context instead of 10k does not
+help (+0.0010, CI includes 0). The C3 ensemble remains the best model overall.
+
+*TabPFN-3.5 (Prior Labs), used under the TabPFN-3.5 Non-Commercial License; research evaluation only,
+run locally with all outbound network blocked; never used in production — production uses Exp C3.
+Model weights and per-match predictions are not part of this repo.* Details:
+`notebooks/15_exp_d_tabpfn35.ipynb`.
+
 ## Serving
 
 This repo includes a serving/export pipeline for Exp C3, the best point-estimate model in the
@@ -383,6 +443,8 @@ still be true, and what didn't" note):
 | 11 | `11_enriched_gru_text.ipynb` | Extension | Exp C4 (Exp C3 + real Gemini-scored `Trenutci` text-skill feature, `data/trenutci_scores.csv`) — rigorous null result, including on the cold-start hypothesis it was built to test |
 | 12 | `12_walkforward_with_c3_c4.ipynb` | Validation (capstone) | Walk-forward CV on the 5 strongest models (Exp 0/B′/C2/C3/C4) — the project's final, time-validated conclusion |
 | 13 | `13_learning_curve_by_experience.ipynb` | Follow-up analysis | Learning-curve breakdown of accuracy/Brier score by player experience bucket — how much history a player needs before predictions stabilize |
+| 14 | `14_exp_d_tabpfn_v2.ipynb` (Exp D) | Extension | TabPFN v2 zero-shot in-context comparison against ELO and C3 on the newer data snapshot (see "Exp D" section; numbers not comparable with 01–13) |
+| 15 | `15_exp_d_tabpfn35.ipynb` (Exp D35) | Extension | TabPFN-3.5 zero-shot comparison against C3, v2 and ELO on the same newer snapshot (research-only, non-commercial license; see "Exp D — TabPFN-3.5" section) |
 
 ## Charts
 
@@ -436,7 +498,7 @@ committed separately as static PNGs under `models/`:
 │                                # test_predictions*.parquet, trenutci_scores.csv, etc. are all
 │                                # gitignored (real player IDs / PII) — regenerate locally via the
 │                                # scripts below if you have your own data source
-├── notebooks/                  # 01–13, see table above
+├── notebooks/                  # 01–15, see table above
 ├── scripts/
 │   ├── db-config.json          # local DB credentials (gitignored, never committed — supply your own)
 │   ├── test_connection.mjs     # one-off DB connectivity check

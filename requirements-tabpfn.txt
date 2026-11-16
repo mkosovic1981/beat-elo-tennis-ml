@@ -1,0 +1,15 @@
+# Exp D - TabPFN v2 (CPU, local). Python 3.12, venv: python -m venv .venv-tabpfn  (gitignored)
+# Install (order matters, torch from the CPU index first):
+#   .venv-tabpfn\Scripts\python.exe -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+#   .venv-tabpfn\Scripts\python.exe -m pip install -r requirements-tabpfn.txt
+# tabpfn 2.1.x = v2 checkpoint family only (no 2.5+), code Apache 2.0, weights Prior Labs License
+# (Apache 2.0 + attribution "Built with PriorLabs-TabPFN"). Weights are NOT downloaded by the code:
+# scripts/tabpfn_guard.py forces offline mode and fails if the .ckpt is missing.
+tabpfn==2.1.3
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.6.1
+scipy==1.18.1
+pyarrow==26.0.1
+einops==0.8.2
+huggingface-hub==0.36.2

@@ -29,3 +29,15 @@ node_modules/
 # ONNX/isotonic-calibrator serving artifacts, which are intentionally committed).
 models/*.pkl
 models/*.pt
+.venv-tabpfn/
+models/tabpfn/
+*.ckpt
+
+# TabPFN experiment results and weights - never commit
+exp_d/
+exp_d35/
+*.safetensors
+weights/
+out/
+*_rezultati.zip
+exp_d*_colab.zip
