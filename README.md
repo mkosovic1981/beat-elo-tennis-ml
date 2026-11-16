@@ -272,6 +272,37 @@ run locally with all outbound network blocked; never used in production — prod
 Model weights and per-match predictions are not part of this repo.* Details:
 `notebooks/15_exp_d_tabpfn35.ipynb`.
 
+## Blending the GRU with tabular models
+
+Averaging the GRU with a tabular model (fixed 0.5/0.5 weights, chosen before looking at any result, no
+fitting on the test data) on the same newer snapshot (split 2025-06-06, walk-forward, 4 folds, 14,428
+matches pooled). The percentage is the Brier reduction relative to ELO (0.17633).
+
+| Model | Brier ↓ | vs ELO |
+|---|---|---|
+| 0.5·C3 ensemble + 0.5·TabPFN-3.5 (research-only) | 0.15661 | 11.2% |
+| 0.5·C3 ensemble + 0.5·TabPFN v2 | 0.15733 | 10.8% |
+| 0.5·C3 ensemble + 0.5·XGBoost B′ | 0.15779 | 10.5% |
+| (C3 ensemble + TabPFN v2 + XGBoost B′) / 3 | 0.15784 | 10.5% |
+| 0.5·C3 (single seed) + 0.5·XGBoost B′ | 0.15798 | 10.4% |
+| C3 — 5-seed ensemble | 0.15889 | 9.9% |
+| C3 — enriched GRU (single seed) | 0.16009 | 9.2% |
+| TabPFN-3.5 (research-only) | 0.16088 | 8.8% |
+| TabPFN v2 | 0.16219 | 8.0% |
+| XGBoost B′ | 0.16405 | 7.0% |
+| ELO baseline | 0.17633 | — |
+
+**Takeaway:** blending the GRU with a tabular model beats the GRU alone: the TabPFN v2 blend improves on
+the C3 ensemble by −0.00158 Brier (95% CI [−0.00240, −0.00075], better in 4 of 4 folds) and the XGBoost B′
+blend by −0.00112 [−0.00203, −0.00023]; the two blends are statistically indistinguishable from each other
+(+0.00046 [−0.00012, +0.00104]).
+Adding both tabular models at once does not help, because their residuals are highly correlated (0.95–0.98).
+On identical 37 features TabPFN v2 is significantly better than XGBoost B′ (−0.00186 [−0.00305, −0.00070]).
+
+*The TabPFN-3.5 blend is research-only (TabPFN-3.5 Non-Commercial License, Prior Labs); it is shown for
+comparison and is not a candidate for any deployed system. Production currently uses Exp C3.* Details:
+`notebooks/16_blend_gru_tabular.ipynb`.
+
 ## Serving
 
 This repo includes a serving/export pipeline for Exp C3, the best point-estimate model in the
@@ -445,6 +476,7 @@ still be true, and what didn't" note):
 | 13 | `13_learning_curve_by_experience.ipynb` | Follow-up analysis | Learning-curve breakdown of accuracy/Brier score by player experience bucket — how much history a player needs before predictions stabilize |
 | 14 | `14_exp_d_tabpfn_v2.ipynb` (Exp D) | Extension | TabPFN v2 zero-shot in-context comparison against ELO and C3 on the newer data snapshot (see "Exp D" section; numbers not comparable with 01–13) |
 | 15 | `15_exp_d_tabpfn35.ipynb` (Exp D35) | Extension | TabPFN-3.5 zero-shot comparison against C3, v2 and ELO on the same newer snapshot (research-only, non-commercial license; see "Exp D — TabPFN-3.5" section) |
+| 16 | `16_blend_gru_tabular.ipynb` | Extension | Fixed 0.5/0.5 blends of the GRU (C3 / C3 ensemble) with XGBoost B′ and TabPFN v2 (and a research-only TabPFN-3.5 blend) on the newer snapshot, walk-forward pooled (see "Blending the GRU with tabular models" section) |
 
 ## Charts
 
@@ -498,7 +530,7 @@ committed separately as static PNGs under `models/`:
 │                                # test_predictions*.parquet, trenutci_scores.csv, etc. are all
 │                                # gitignored (real player IDs / PII) — regenerate locally via the
 │                                # scripts below if you have your own data source
-├── notebooks/                  # 01–15, see table above
+├── notebooks/                  # 01–16, see table above
 ├── scripts/
 │   ├── db-config.json          # local DB credentials (gitignored, never committed — supply your own)
 │   ├── test_connection.mjs     # one-off DB connectivity check

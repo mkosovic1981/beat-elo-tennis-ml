@@ -139,3 +139,32 @@ def reliability(p, y, bins=10):
     o = np.argsort(p, kind='stable')
     parts = np.array_split(o, bins)
     return np.array([p[i].mean() for i in parts]), np.array([y[i].mean() for i in parts])
+
+
+# ---------------------------------------------------------------- notebook 16 (GRU + tabular blends)
+def add_xgb(B, workdir):
+    """Join XGBoost B' predictions (<workdir>/exp_xgb, from run_walkforward_xgb_bprime.py) into the fold frames, in place.
+    Adds p_xgb (folds 1-4)."""
+    E = Path(workdir) / 'exp_xgb'
+    for k in B:
+        df = pd.read_parquet(E / f'test_predictions_xgb_bprime_fold{k}.parquet')
+        assert not df.duplicated(K).any()
+        B[k] = B[k].merge(df.set_index(K)['p_cal_Bprime_xgb'].rename('p_xgb'), left_on=K, right_index=True, how='left')
+        assert B[k]['p_xgb'].notna().all()
+    return B
+
+
+def add_blends(B, v2='p_D-Bprime__last10k__s42', v35='p_d35_full'):
+    """Add fixed-weight blend columns in place (weights chosen in advance -- nothing is fitted on test data).
+    Needs p_C3, p_C3ens, p_xgb, v2 (and v35 for the research-only blend). Returns {column: label}."""
+    for k, d in B.items():
+        d['b_C3_xgb'] = 0.5 * d.p_C3 + 0.5 * d.p_xgb
+        d['b_C3ens_xgb'] = 0.5 * d.p_C3ens + 0.5 * d.p_xgb
+        d['b_C3_v2'] = 0.5 * d.p_C3 + 0.5 * d[v2]
+        d['b_C3ens_v2'] = 0.5 * d.p_C3ens + 0.5 * d[v2]
+        d['b_3way'] = (d.p_C3ens + d[v2] + d.p_xgb) / 3
+        if v35 in d:
+            d['b_C3ens_v35'] = 0.5 * d.p_C3ens + 0.5 * d[v35]
+    return {'b_C3_xgb': '0.5 C3 + 0.5 XGB', 'b_C3ens_xgb': '0.5 C3ens + 0.5 XGB', 'b_C3_v2': '0.5 C3 + 0.5 TabPFN v2',
+            'b_C3ens_v2': '0.5 C3ens + 0.5 TabPFN v2', 'b_3way': '(C3ens + v2 + XGB) / 3',
+            'b_C3ens_v35': '0.5 C3ens + 0.5 TabPFN-3.5 (research-only)'}
