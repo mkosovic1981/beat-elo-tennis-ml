@@ -36,9 +36,8 @@ def main():
         f = Path(wd) / 'matches_export.csv'
     d = pd.read_csv(f)
     d = d[d.LigaTip.isin(['SM', 'SF'])]
-    # W.O. rows are stored as 6:0 6:0 (sets 6,6 vs 0,0) in the source system
-    wo = (d.W_Set1 == 6) & (d.W_Set2 == 6) & (d.L_Set1 == 0) & (d.L_Set2 == 0)
-    d = d[~wo].copy()
+    # W.O. (not-played flag) rows are already excluded at export; 6:0 6:0 rows without the flag are kept
+    d = d.copy()
     d['Datum'] = pd.to_datetime(d.Datum, utc=True).dt.tz_localize(None)
     d['Year'] = d.Datum.dt.year
     n = len(d)
@@ -159,12 +158,12 @@ def main():
     fig.tight_layout(rect=(0, 0.035, 1, 1))
     fig.text(0.5, 0.012,
              f'N = {n:,} matches, {players:,} players, {d0:%Y-%m} – {d1:%Y-%m}, '
-             'official singles (SM/SF), W.O. excluded',
+             'official singles (SM/SF), W.O. excluded at export (not-played flag)',
              ha='center', fontsize=9, color='#444444')
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=200, facecolor='white')
     print(f'N={n} players={players} range={d0:%Y-%m-%d}..{d1:%Y-%m-%d} SM={int((d.LigaTip == "SM").sum())} '
-          f'SF={int((d.LigaTip == "SF").sum())} WO_removed={int(wo.sum())}')
+          f'SF={int((d.LigaTip == "SF").sum())}')
     print(f'median/player={med} mean={pc.mean():.1f} three_sets={three.mean():.3f} stb={stb.mean():.3f} med_games={gm}')
     print('F bins', list(zip(np.round(xs), np.round(ys, 3), np.round(ex, 3), cnt)))
 

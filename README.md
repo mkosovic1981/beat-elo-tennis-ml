@@ -10,7 +10,7 @@ November 2026
 
 Rating systems such as ELO convert match history into win probabilities. This study has two parts.
 (1) *Beat:* can a learned model beat the league's existing ELO rating system at Tenis Liga Split, a
-recreational tennis league (singles, about 17.5k official matches since 2017, pseudonymized), without ever
+recreational tennis league (singles, about 18k official matches since 2017, pseudonymized), without ever
 seeing ELO as an input? An ELO-free two-tower GRU (Exp C) does: on the July snapshot its Brier score
 is 0.1628 against 0.1771 for ELO (−8.1%), with higher accuracy (76.21% vs 75.18%). (2) *Improve:* most
 models use ELO as a feature, so they do not so much beat it as build on it; how far can ELO be
@@ -102,10 +102,13 @@ league administrators can delete or correct a wrongly entered result.
 **Official matches and W.O.** A match counts as *official* if it was played in a league (as
 opposed to a friendly). A match that was not played (walkover, W.O.) is registered by the same form
 with a stated reason, is stored as a 6:0, 6:0 win for the awarded player, and triggers a
-notification to the league committee. The export carries no W.O. indicator, so W.O. results can only
-be recognised by their score. They count as wins in the league standings but are not matches
-actually played; 6:0 6:0 rows are therefore excluded from this study's dataset, as are Masters,
-doubles and friendly matches (§2.2).
+notification to the league committee. In the source such a match carries a "not played" flag. W.O.
+results count as wins in the league standings but are not matches actually played; they are
+excluded at export by this flag, before sequences, features, labels and evaluation are built (the
+same filter is used in training and in production serving), as are Masters, doubles and friendly
+matches (§2.2). Because a W.O. is also stored as a 6:0 6:0 score, the score alone is not a reliable
+criterion: 6:0 6:0 matches without the flag stay in the data (about 2.8%) and may include a few
+unflagged W.O.
 
 **Export for research.** Analysis never touches the live system. A script in this repository
 (`scripts/export_data.mjs`) reads the relational database of the league through a read-only
@@ -128,34 +131,34 @@ private). Raw exports and per-match predictions are never committed (Appendix F)
 
 | | July 2026 | November 2026 |
 |---|---|---|
-| Matches | ~17,128 | 17,533 (6:0 6:0 rows excluded; 18,035 with them) |
+| Matches | ~17,128 | 18,035 (W.O. already excluded at export) |
 | Split | chronological 80/20; test 3,426 matches | chronological; test 3,607 matches (= walk-forward fold 4) |
 | Walk-forward | 4 expanding folds (notebooks 06, 09, 12) | 4 expanding folds, 14,428 test matches pooled (notebooks 14–18) |
 | Models | 0, A, A′, B, B′, C, C2, C3, C4 | 0, A, A′, B, B′, C, C2, C3 (+5-seed ensemble), TabPFN, XGBoost B′, blends |
 
-**Dataset size and scope.** After excluding the 502 rows with a 6:0 6:0 score (the way a W.O. is
-stored; the source has no W.O. flag, see §2.1), the November dataset used for modelling contains
-N = 17,533 official singles matches (16,051 men's `SM`, 1,482 women's `SF`) between 806 players,
-from May 2017 to November 2026. The 18,035 matches mentioned in §3.0 and in the ELO reconstruction
-are the same export *including* those 502 rows, because the league's rating system and the
-feature table were built on that superset; the figure and the statistics below describe the
-17,533. Players have a median of 21 matches (mean 43.5, maximum 306), so most players have a short
-history. 27.5% of matches go to a third set and 17.8% of all matches end with a match tiebreak
-(these shares differ slightly from the July-snapshot figures in §2.1 because the sample is larger
-and later); the median total of games in the first two sets is 18.
+**Dataset size and scope.** W.O. matches are excluded at export by the source's not-played flag
+(see §2.1), so the November dataset used for modelling, features and evaluation contains
+N = 18,035 official singles matches (16,397 men's `SM`, 1,638 women's `SF`) between 812 players,
+from May 2017 to November 2026; this is the same set as in §3.0 and the ELO reconstruction. About
+2.8% of matches are recorded as 6:0 6:0 without the flag; they are genuine one-sided matches or
+rare unflagged W.O. and remain in the data. Players have a median of 22 matches (mean 44.4,
+maximum 311), so most players have a short history. 26.7% of matches go to a third set and 17.3%
+of all matches end with a match tiebreak (these shares differ slightly from the July-snapshot
+figures in §2.1 because the sample is larger and later); the median total of games in the first
+two sets is 18.
 
 ![Figure A](notebooks/figures/dataset_overview.png)
 
-**Figure A.** Dataset overview (N = 17,533 official singles matches, 806 players, May 2017 to
-November 2026, W.O.-coded 6:0 6:0 rows excluded). (A) Matches per year, men (`SM`) and women (`SF`);
+**Figure A.** Dataset overview (N = 18,035 official singles matches, 812 players, May 2017 to
+November 2026, W.O. excluded at export by the not-played flag). (A) Matches per year, men (`SM`) and women (`SF`);
 2017 starts in May and 2026 is partial. (B) Distribution of matches per player (log scale; dashed
-line: median 21). (C) Pre-match ELO ratings per player-match, by league type; the spike at 1,400 is
+line: median 22). (C) Pre-match ELO ratings per player-match, by league type; the spike at 1,400 is
 the starting rating. (D) Set-score outcomes from the winner's perspective: straight sets, a full
 third set, and a third-set match tiebreak. (E) Total games in the first two sets, the quantity that
 drives the league's margin-dependent ELO score (Table C). (F) Raw ELO calibration: observed
 favourite win rate by absolute rating gap (95% intervals) against the ELO expectation (dashed).
 The favourite wins more often than ELO implies over most of the range (e.g. 0.83 against 0.73 at a
-gap of about 175) and less often only in the largest bin (about 495: 0.88 against about 0.95), which
+gap of about 175) and less often only in the largest bin (about 510: 0.90 against about 0.94), which
 motivates the calibration step of §3.3. Produced by `scripts/plot_dataset_overview.py`.
 
 **Table E.** Match record schema (one row per match; field names are descriptive, not the
