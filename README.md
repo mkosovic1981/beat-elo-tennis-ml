@@ -1,4 +1,6 @@
-# Beating ELO With Raw Match History: Win-Probability Models for Tenis Liga Split
+# Can We Beat ELO, and How Far Can We Improve It?
+
+### Sequence and tabular win-probability models for Tenis Liga Split
 
 **Marin Kosović**, PhD · Split, Croatia · ORCID [0000-0003-3149-4288](https://orcid.org/0000-0003-3149-4288)
 
@@ -6,17 +8,20 @@ November 2026
 
 ## Abstract
 
-Rating systems such as ELO convert match history into win probabilities. This study asks whether
-learned models can outperform the league's existing ELO rating system at Tenis Liga Split, a recreational tennis league
-(singles, about 18k matches since 2017, pseudonymized), and whether they can do so without ELO as an
-input. Leakage-safe point-in-time features, 4-fold walk-forward validation (14,428 pooled test
+Rating systems such as ELO convert match history into win probabilities. This study has two parts.
+(1) *Beat:* can a learned model beat the league's existing ELO rating system at Tenis Liga Split, a
+recreational tennis league (singles, about 17.5k official matches since 2017, pseudonymized), without ever
+seeing ELO as an input? An ELO-free two-tower GRU (Exp C) does: on the July snapshot its Brier score
+is 0.1628 against 0.1771 for ELO (−8.1%), with higher accuracy (76.21% vs 75.18%). (2) *Improve:* most
+models use ELO as a feature, so they do not so much beat it as build on it; how far can ELO be
+improved? Leakage-safe point-in-time features, 4-fold walk-forward validation (14,428 pooled test
 matches) and a paired match-level bootstrap are used to compare ELO, XGBoost, two-tower GRU sequence
 models, zero-shot TabPFN and fixed-weight blends. The ELO baseline is isotonic-calibrated on the same
 slice as the models; comparing against raw ELO overstates every gain by about 2.5 percentage points.
-Against calibrated ELO, a 5-seed GRU ensemble reduces Brier score by 7.8%, the best permitted blend
-(GRU ensemble + TabPFN v2) by 8.6%, and a research-only blend with TabPFN-3.5 by 9.0%; accuracy is
-about 76.5% versus 74.9% for ELO. An ELO-free GRU also beats ELO on an earlier data snapshot. The
-results come from a single league and are directional rather than universal.
+Against calibrated ELO, the ELO-augmented 5-seed GRU ensemble (C3) improves Brier score by 7.8%, the
+best permitted blend (GRU ensemble + TabPFN v2) by 8.6%, and a research-only blend with TabPFN-3.5 by
+9.0%; accuracy is about 76.5% versus 74.9% for raw ELO (74.7% calibrated). The results come from a single league and are
+directional rather than universal.
 
 ### Key results
 
@@ -50,19 +55,23 @@ output; ELO is shown both ways. TabPFN-3.5 is research-only (non-commercial lice
 
 ELO turns a sequence of results into a skill estimate and a win probability (Elo, 1978). It is
 simple, transparent and hard to beat, but it compresses a player's history into one number and
-ignores match context (rest, league tier, home court, head-to-head). The research questions are:
+ignores match context (rest, league tier, home court, head-to-head). Most practical models use ELO
+as one of their inputs, so they improve on it rather than beat it from scratch; the study therefore
+asks one *beat* question and three *improve* questions:
 
-- **RQ1.** Can a model that never sees the ELO number beat ELO?
-- **RQ2.** How much do ELO-included models add over ELO-free counterparts?
-- **RQ3.** How does a pretrained tabular foundation model (TabPFN), used zero-shot, compare with
-  trained models (XGBoost, GRU)?
-- **RQ4.** Does combining a sequence model with a tabular model improve on either alone?
+- **RQ1 (beat).** Can a model that never sees the ELO number beat ELO?
+- **RQ2 (improve).** How much do ELO-included models add over ELO-free counterparts, i.e. how far
+  can a sequence model improve on ELO?
+- **RQ3 (improve).** How does a pretrained tabular foundation model (TabPFN), used zero-shot, compare
+  with trained models (XGBoost, GRU) as an improvement on ELO?
+- **RQ4 (improve).** Does blending a sequence model with a tabular model improve on ELO, and on
+  either model alone?
 
 Contributions: (i) a leakage-safe point-in-time pipeline with a time-based evaluation protocol;
-(ii) an ELO-free GRU that beats ELO and an enriched ELO-included GRU as best single model; (iii) a
-zero-shot TabPFN comparison; (iv) fixed-weight GRU + tabular blends with paired significance tests;
-(v) a record of results that did not survive scrutiny (an early single-split overclaim, a null
-result for LLM-derived text features).
+(ii) *beat:* an ELO-free GRU that beats ELO; (iii) *improve:* an enriched ELO-augmented GRU as best
+single model, a zero-shot TabPFN comparison, and fixed-weight GRU + tabular blends with paired
+significance tests; (iv) a record of results that did not survive scrutiny (an early single-split
+overclaim, a null result for LLM-derived text features).
 
 ## 2 Data
 
@@ -92,10 +101,11 @@ league administrators can delete or correct a wrongly entered result.
 
 **Official matches and W.O.** A match counts as *official* if it was played in a league (as
 opposed to a friendly). A match that was not played (walkover, W.O.) is registered by the same form
-with a stated reason, is stored as a 6:0, 6:0 win for the awarded player with a "not played" flag,
-and triggers a notification to the league committee. W.O. results count as wins in the league
-standings but are not matches actually played; they are excluded from this study's dataset, as are
-Masters, doubles and friendly matches (§2.2).
+with a stated reason, is stored as a 6:0, 6:0 win for the awarded player, and triggers a
+notification to the league committee. The export carries no W.O. indicator, so W.O. results can only
+be recognised by their score. They count as wins in the league standings but are not matches
+actually played; 6:0 6:0 rows are therefore excluded from this study's dataset, as are Masters,
+doubles and friendly matches (§2.2).
 
 **Export for research.** Analysis never touches the live system. A script in this repository
 (`scripts/export_data.mjs`) reads the relational database of the league through a read-only
@@ -118,10 +128,110 @@ private). Raw exports and per-match predictions are never committed (Appendix F)
 
 | | July 2026 | November 2026 |
 |---|---|---|
-| Matches | ~17,128 | refreshed, pseudonymized (~18k) |
+| Matches | ~17,128 | 17,533 (6:0 6:0 rows excluded; 18,035 with them) |
 | Split | chronological 80/20; test 3,426 matches | chronological; test 3,607 matches (= walk-forward fold 4) |
 | Walk-forward | 4 expanding folds (notebooks 06, 09, 12) | 4 expanding folds, 14,428 test matches pooled (notebooks 14–18) |
 | Models | 0, A, A′, B, B′, C, C2, C3, C4 | 0, A, A′, B, B′, C, C2, C3 (+5-seed ensemble), TabPFN, XGBoost B′, blends |
+
+**Dataset size and scope.** After excluding the 502 rows with a 6:0 6:0 score (the way a W.O. is
+stored; the source has no W.O. flag, see §2.1), the November dataset used for modelling contains
+N = 17,533 official singles matches (16,051 men's `SM`, 1,482 women's `SF`) between 806 players,
+from May 2017 to November 2026. The 18,035 matches mentioned in §3.0 and in the ELO reconstruction
+are the same export *including* those 502 rows, because the league's rating system and the
+feature table were built on that superset; the figure and the statistics below describe the
+17,533. Players have a median of 21 matches (mean 43.5, maximum 306), so most players have a short
+history. 27.5% of matches go to a third set and 17.8% of all matches end with a match tiebreak
+(these shares differ slightly from the July-snapshot figures in §2.1 because the sample is larger
+and later); the median total of games in the first two sets is 18.
+
+![Figure A](notebooks/figures/dataset_overview.png)
+
+**Figure A.** Dataset overview (N = 17,533 official singles matches, 806 players, May 2017 to
+November 2026, W.O.-coded 6:0 6:0 rows excluded). (A) Matches per year, men (`SM`) and women (`SF`);
+2017 starts in May and 2026 is partial. (B) Distribution of matches per player (log scale; dashed
+line: median 21). (C) Pre-match ELO ratings per player-match, by league type; the spike at 1,400 is
+the starting rating. (D) Set-score outcomes from the winner's perspective: straight sets, a full
+third set, and a third-set match tiebreak. (E) Total games in the first two sets, the quantity that
+drives the league's margin-dependent ELO score (Table C). (F) Raw ELO calibration: observed
+favourite win rate by absolute rating gap (95% intervals) against the ELO expectation (dashed).
+The favourite wins more often than ELO implies over most of the range (e.g. 0.83 against 0.73 at a
+gap of about 175) and less often only in the largest bin (about 495: 0.88 against about 0.95), which
+motivates the calibration step of §3.3. Produced by `scripts/plot_dataset_overview.py`.
+
+**Table E.** Match record schema (one row per match; field names are descriptive, not the
+internal names of the source system).
+
+| Field | Type | Description |
+|---|---|---|
+| `date` | date | Match date |
+| `season_id` | int | Season (about one calendar month) the match belongs to |
+| `league_id` | int | League group within the season |
+| `league_type` | `MS` / `WS` | Men's / women's singles (`SM` / `SF` above) |
+| `tier` | int, 1-9 | Tier of the league (level of play) |
+| `winner_id`, `loser_id` | pseudonym | Pseudonymous player identifiers |
+| `set1`, `set2`, `set3` | games | Games won by the winner and loser per set; the third set may be a 10-point match tiebreak |
+| `elo_before`, `elo_after` | float | League ELO of each player before and after the match |
+| `matches_before` | int | Number of the player's earlier matches (point-in-time) |
+| `days_since_last` | int | Days since the player's previous match |
+| `form_last10` | float | Win rate over the player's previous 10 matches |
+| `career_win_rate` | float | Win rate over all earlier matches |
+| `h2h_*` | float / int | Head-to-head record of the pair before the match (win-rate difference, total matches) |
+| `age` | float | Age in years (birth year reduced to age before use) |
+| league / season context | various | Number of players in the league group, relative tier position, home-court share |
+
+Features derived from these fields are computed strictly as of the moment before each match (§3.1).
+
+**Illustrative records (synthetic).** The following three tables are *fictitious*: generated in the
+same format as the real data, not copied from any real match or player. Player identifiers are
+placeholders (`P01`, `P02`, ...). The ELO values are illustrative and do not form a real rating
+history.
+
+**Table F.** Synthetic match records.
+
+| date | league_type | tier | winner_id | loser_id | score | winner elo_before | winner elo_after | loser elo_before | loser elo_after |
+|---|---|---|---|---|---|---|---|---|---|
+| 2025-03-14 | MS | 3 | P01 | P02 | 6:3 4:6 10:7 | 1512.4 | 1523.9 | 1498.1 | 1486.9 |
+| 2025-05-22 | MS | 5 | P03 | P04 | 6:4 6:3 | 1388.7 | 1403.5 | 1471.9 | 1457.5 |
+| 2025-09-10 | WS | 2 | P05 | P06 | 7:5 6:2 | 1655.0 | 1664.8 | 1590.2 | 1580.7 |
+| 2026-02-03 | MS | 4 | P07 | P08 | 4:6 6:3 10:8 | 1423.6 | 1435.0 | 1405.8 | 1394.8 |
+| 2026-04-19 | MS | 6 | P09 | P10 | 6:2 7:6 | 1302.9 | 1316.4 | 1347.5 | 1334.4 |
+| 2026-10-27 | WS | 3 | P11 | P12 | 6:7 6:4 10:5 | 1481.3 | 1492.0 | 1444.0 | 1433.6 |
+
+**Table G.** Synthetic per-player sequence: the last five of a fictitious player's matches, oldest
+first, as the nine per-step features fed to the GRU (set margin divided by 12; days of rest capped
+at 90 and divided by 90; league level divided by 7; opponent ELO standardised).
+
+| t | Won | SetMarginScaled | DaysRestScaled | LeagueLevelScaled | HomeShareBefore | OpponentCareerWinRateBefore | OppEloBeforeScaled | WasH2H | IsPlaceholder |
+|---|---|---|---|---|---|---|---|---|---|
+| t-4 | 1 | 0.417 | 0.100 | 0.571 | 0.40 | 0.52 | -0.119 | 0 | 0 |
+| t-3 | 0 | -0.333 | 0.144 | 0.571 | 0.43 | 0.61 | 0.154 | 0 | 0 |
+| t-2 | 1 | 0.583 | 0.089 | 0.571 | 0.40 | 0.47 | -0.265 | 1 | 0 |
+| t-1 | 1 | 0.250 | 0.233 | 0.571 | 0.38 | 0.55 | 0.016 | 0 | 0 |
+| t | 0 | -0.167 | 0.067 | 0.571 | 0.40 | 0.58 | 0.102 | 1 | 0 |
+
+**Table H.** Synthetic tabular feature row (subset of about 70 columns): the first match of Table F
+from the winner's point of view; a mirrored `loser_pov` row is generated for every match.
+
+| feature | value |
+|---|---|
+| date | 2025-03-14 |
+| label | 1 |
+| perspective | winner_pov |
+| elo_diff | 14.3 |
+| player_elo / opponent_elo | 1512.4 / 1498.1 |
+| player_match_count_before / opponent_match_count_before | 47 / 33 |
+| player_days_since_last_match / opponent_days_since_last_match | 9 / 15 |
+| player_form_last10 / opponent_form_last10 | 0.6 / 0.4 |
+| player_career_winrate_before / opponent_career_winrate_before | 0.55 / 0.48 |
+| h2h_win_rate_before_diff | 0.1 |
+| h2h_total_before | 2 |
+| player_age / opponent_age | 41.0 / 36.0 |
+| player_stb_win_rate_before | 0.5 |
+| league_tier | 3 |
+| league_type | MS |
+| players_in_league | 8 |
+| relative_tier_pct | 0.62 |
+| split | train |
 
 Experiment C4 (July only) uses a side table of LLM-scored free-text player descriptions
 (`data/trenutci_scores.csv`, gitignored); see notebook 11.
@@ -262,6 +372,19 @@ with the stored post-match ratings for 97.2% of 18,035 matches within $10^{-6}$ 
 0.5 points). The remainder is due to the counter $n$, which in the league software also includes
 matches outside the research export (e.g. Masters), so $K$ differs for those players.
 
+*Relation to the standard Elo system.* The league rule keeps the Elo skeleton but changes three of its four components (Table D).
+
+**Table D.** League rating versus standard Elo and related approaches.
+
+| Component | League rating | Standard Elo | Related approach |
+|---|---|---|---|
+| Expected score | Logistic, base 10, scale 400 | Identical (Elo, 1978) | — |
+| K-factor | Experience-dependent, $K=\max(50,300-2.5n)$ | Constant $K$ | FIDE regulations: $K=40/20/10$ by experience and rating (FIDE); tennis Elo with $K=250/(n+5)^{0.4}$ (Kovalchik, 2016; FiveThirtyEight, 2015–2023) |
+| Actual score | Fractional, from games in the first two sets (three-set matches 0.5) | Binary 1/0 | Margin-of-victory Elo, e.g. goal difference in football (Hvattum & Arntzen, 2010) |
+| Provisional rule | Only the provisional ($n\le5$) player's rating changes | None | Provisional ratings and rating uncertainty in Glicko (Glickman, 1999) |
+
+The specific constants (300, 2.5, floor 50, the games table and the $n>5$ threshold) are league-specific design choices with no published reference.
+
 Two consequences matter for the comparison. First, the rating is not trained to predict the
 binary outcome: it is updated towards a margin-based score, so the probability $E_1$ it implies
 need not be calibrated (§3.3). Second, the rating of a newcomer moves by up to 300 points in a
@@ -356,7 +479,7 @@ in 4.1–4.3 are pooled over the 4 walk-forward folds (14,428 matches, November 
 | ELO (calibrated) | 0.17187 [0.16839, 0.17533] | — | 2.5% | 74.65% | 0.8224 |
 | ELO (raw) | 0.17633 [0.17369, 0.17891] | −2.6% | — | 74.88% | 0.8246 |
 
-All learned models beat both ELO variants; the top models differ by less than 0.5 pp in accuracy
+All learned models outperform both ELO variants; the top models differ by less than 0.5 pp in accuracy
 with overlapping intervals, so Brier and AUC are what separate them. TabPFN v2, without any
 training, trails the trained GRU by about 1% in Brier; TabPFN-3.5 (research-only) reaches the
 single-seed GRU but not the 5-seed ensemble.
@@ -482,7 +605,7 @@ C2 0.1614 ± 0.0105, C3 0.1601 ± 0.0117, TabPFN v2 0.1622 ± 0.0092, TabPFN-3.5
 
 ### 4.5 TabPFN, calibration and symmetry
 
-**TabPFN.** With ELO among its features, TabPFN v2 beats ELO in all four folds; without it (D-A′) it
+**TabPFN.** With ELO among its features, TabPFN v2 outperforms ELO in all four folds; without it (D-A′) it
 gives no gain over ELO. TabPFN-3.5 improves over v2 as a model effect, not a context-size effect
 (with the same 10k context the gain persists; full context alone does not help). TabPFN-3.5 is used
 under the TabPFN-3.5 Non-Commercial License: research evaluation only, run locally with all
@@ -515,7 +638,7 @@ at prediction time; the charts are in Appendix B.
 2. **The GRU learns the trajectory itself and does slightly better than hand engineering.** The nine
    trajectory features close about two thirds of the gap between ELO-free XGBoost and the GRU.
 3. **ELO and the learned representation are substitutes on average**, but ELO buys robustness: C2
-   beats ELO in 4/4 walk-forward folds, the ELO-free C in 3/4 (it loses the earliest, thinnest fold).
+   outperforms ELO in 4/4 walk-forward folds, the ELO-free C in 3/4 (it loses the earliest, thinnest fold).
 4. **Feature richness, not architecture, closes the cold-start gap.** Once the GRU is enriched
    (C3/C4) it beats B′ in every fold; per-step opponent ELO does almost all of the new work.
 5. **The methodology caught a real overclaim.** The original headline "the ELO-free GRU beats
@@ -547,15 +670,21 @@ in recreational matches, but is not a proven bound.
 - **TabPFN v2 context** is limited to 10k rows (about 41% of fold-4 training data).
 - **Fixed blend weights** are untuned; a tuned weight would need its own validation fold.
 - **TabPFN-3.5** is non-commercial; its results and blends containing it are reference points only.
+- **Single ELO baseline.** Only the league's own rating is used as the reference; a Kovalchik-style tennis Elo (Kovalchik, 2016) is a natural additional baseline for future work.
 - **Snapshots are not directly comparable**; no hyperparameter search for A′/B′/C2/C3/C4 (by design);
   the C4 text score comes from a single LLM pass and about 14% of players have no text.
 
 ## 6 Conclusion
 
+**Beat**
+
 - **RQ1 — yes.** An ELO-free GRU beats ELO (Brier 0.1628 vs 0.1771 on the July snapshot), though it
   loses the earliest walk-forward fold.
-- **RQ2 — ELO adds robustness and a modest gain.** ELO-included GRUs are better than the ELO-free
-  one (C2 −9.2%, C3 −10.4% vs −8.1% for C, July snapshot) and more stable across time.
+
+**Improve**
+
+- **RQ2 — ELO adds robustness and a modest gain.** ELO-included GRUs improve on ELO more than the
+  ELO-free one (C2 −9.2%, C3 −10.4% vs −8.1% for C, July snapshot) and are more stable across time.
 - **RQ3 — a foundation model is competitive without training, but does not win.** TabPFN v2
   (−6.2% vs calibrated ELO) trails the GRU ensemble (−7.8%); TabPFN-3.5 (research-only, non-commercial
   licence) reaches the single-seed GRU.
@@ -573,7 +702,12 @@ fair one.
 - Cho, K., et al. (2014). Learning phrase representations using RNN encoder–decoder for statistical machine translation. *Proc. EMNLP*, 1724–1734.
 - Dimitriadis, T., Gneiting, T., & Jordan, A. I. (2021). Stable reliability diagrams for probabilistic classifiers. *PNAS*, 118(8), e2016191118.
 - Elo, A. E. (1978). *The Rating of Chessplayers, Past and Present*. Arco.
+- FIDE. FIDE Rating Regulations (FIDE Handbook, B.02).
+- FiveThirtyEight (2015–2023). Elo rating methodology articles. fivethirtyeight.com
+- Glickman, M. E. (1999). Parameter estimation in large dynamic paired comparison experiments. *Journal of the Royal Statistical Society: Series C (Applied Statistics)*, 48(3), 377–394.
 - Hollmann, N., et al. (2025). Accurate predictions on small data with a tabular foundation model. *Nature*, 637, 319–326.
+- Hvattum, L. M., & Arntzen, H. (2010). Using ELO ratings for match result prediction in association football. *International Journal of Forecasting*, 26(3), 460–470.
+- Kovalchik, S. A. (2016). Searching for the GOAT of tennis win prediction. *Journal of Quantitative Analysis in Sports*, 12(3), 127–138.
 - Zadrozny, B., & Elkan, C. (2002). Transforming classifier scores into accurate multiclass probability estimates. *Proc. KDD*, 694–699.
 
 ---
@@ -586,17 +720,17 @@ Notebook 00 (`00_pregled.ipynb`) is a one-page overview of both snapshots. Readi
 | # | Notebook | Phase | Produces |
 |---|---|---|---|
 | 00 | `00_pregled.ipynb` | Overview | Both snapshots side by side: Brier, ECE, CORP (MCB/DSC), walk-forward, blends, pooled accuracy/AUC table, figures |
-| 01 | `01_data_exploration.ipynb` | EDA | Data-quality decisions (age bounds, H2H sparsity, razina distribution) carried into 02 |
+| 01 | `01_data_exploration.ipynb` | EDA | Data-quality decisions (age bounds, H2H sparsity, tier distribution) carried into 02 |
 | 02 | `02_feature_engineering.ipynb` | Feature engineering | `data/features.parquet`, `data/feature_tags.json` — point-in-time features, leakage audit, duplicate-and-flip, time split |
 | 03 | `03_model_training.ipynb` | Modeling | Exp 0 / A / B trained + calibrated, `models/*.pkl`, `data/test_predictions.parquet` |
 | 04 | `04_model_evaluation.ipynb` | Evaluation | Comparison table, calibration curves, feature importance for Exp 0/A/B |
-| 05 | `05_gru_neural_elo.ipynb` | Extension | Exp C (ELO-free GRU), input-masking ablation identifying razina trajectory as the driver |
+| 05 | `05_gru_neural_elo.ipynb` | Extension | Exp C (ELO-free GRU), input-masking ablation identifying tier trajectory as the driver |
 | 06 | `06_confidence_intervals_cv.ipynb` | Validation | Bootstrap CIs + walk-forward CV on Exp 0/A/B/C — tempers 05's single-split claim |
-| 07 | `07_xgboost_trajectory.ipynb` | Extension | Exp A′ / B′ (hand-engineered razina trajectory added to XGBoost) |
+| 07 | `07_xgboost_trajectory.ipynb` | Extension | Exp A′ / B′ (hand-engineered tier trajectory added to XGBoost) |
 | 08 | `08_gru_elo.ipynb` | Extension | Exp C2 (ELO added to the GRU at the prediction head) |
 | 09 | `09_walkforward_top_models.ipynb` | Validation | Walk-forward CV on the strongest successors then available (B′, C2); extended by 10–12 |
 | 10 | `10_enriched_gru.ipynb` | Extension | Exp C3 (enriched GRU) — best single-split model on the July snapshot |
-| 11 | `11_enriched_gru_text.ipynb` | Extension | Exp C4 (C3 + Gemini-scored `Trenutci` text skill) — rigorous null result |
+| 11 | `11_enriched_gru_text.ipynb` | Extension | Exp C4 (C3 + Gemini-scored free-text self-description skill) — rigorous null result |
 | 12 | `12_walkforward_with_c3_c4.ipynb` | Validation (capstone, July) | Walk-forward CV on the 5 strongest models (Exp 0/B′/C2/C3/C4) |
 | 13 | `13_learning_curve_by_experience.ipynb` | Follow-up analysis | Accuracy/Brier by player-experience bucket |
 | 14 | `14_exp_d_tabpfn_v2.ipynb` (Exp D) | Extension (November) | TabPFN v2 zero-shot vs ELO and C3, 3 seeds, paired bootstrap, CORP, walk-forward |
@@ -612,8 +746,8 @@ Each notebook's conclusion cell was revised with this cross-referencing instead 
 
 | Notebook | Original headline | What holds up |
 |---|---|---|
-| `04` | "ELO-free ML (Exp A) cannot beat ELO — a genuine null result." | Null for *that* feature set only — A′ (07) overturns it once razina trajectory is added. |
-| `05` | "The GRU (Exp C) beats everything, including ELO-included XGBoost." | The razina-trajectory *mechanism* holds (audit-confirmed). "Beats everything" does not — see 06. |
+| `04` | "ELO-free ML (Exp A) cannot beat ELO — a genuine null result." | Null for *that* feature set only — A′ (07) overturns it once tier trajectory is added. |
+| `05` | "The GRU (Exp C) beats everything, including ELO-included XGBoost." | The tier-trajectory *mechanism* holds (audit-confirmed). "Beats everything" does not — see 06. |
 | `06` | "Exp C vs Exp B is a statistical tie once CIs and walk-forward are applied." | Holds for the original four experiments; motivated 07–09. |
 | `07` | "Trajectory features close ~2/3 of the ELO-free gap to the GRU; a real remainder survives." | Holds — confirmed by C2's ablation logic and 09's walk-forward. |
 | `08` | "Exp C2 is the best point estimate; its edge over B/B′ is significant, over C is not." | Holds on the single split; 09 confirms the ELO-vs-Exp-0 robustness across time. |
@@ -794,7 +928,7 @@ following never get committed:
 
 - `scripts/db-config.json` — real read-only DB credentials (supply your own to regenerate the export)
 - `data/matches_export.csv`, `data/*.parquet`, `data/trenutci_scores.csv` — player-level match
-  results and `Trenutci` free-text self-descriptions / LLM-derived skill scores (PII)
+  results and free-text self-descriptions / LLM-derived skill scores (PII)
 - `models/*.pkl`, `models/*.pt` — large trained model artifacts (regenerable from training); only
   chart PNGs are kept under `models/`. **Exception:** `serving/models/*` (the exported ONNX graph,
   isotonic calibrator and scaling JSON for Exp C3) is small and *is* intentionally committed — it is
