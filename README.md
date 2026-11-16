@@ -278,19 +278,21 @@ Averaging the GRU with a tabular model (fixed 0.5/0.5 weights, chosen before loo
 fitting on the test data) on the same newer snapshot (split 2025-06-06, walk-forward, 4 folds, 14,428
 matches pooled). The percentage is the Brier reduction relative to ELO (0.17633).
 
-| Model | Brier ↓ | vs ELO |
-|---|---|---|
-| 0.5·C3 ensemble + 0.5·TabPFN-3.5 (research-only) | 0.15661 | 11.2% |
-| 0.5·C3 ensemble + 0.5·TabPFN v2 | 0.15733 | 10.8% |
-| 0.5·C3 ensemble + 0.5·XGBoost B′ | 0.15779 | 10.5% |
-| (C3 ensemble + TabPFN v2 + XGBoost B′) / 3 | 0.15784 | 10.5% |
-| 0.5·C3 (single seed) + 0.5·XGBoost B′ | 0.15798 | 10.4% |
-| C3 — 5-seed ensemble | 0.15889 | 9.9% |
-| C3 — enriched GRU (single seed) | 0.16009 | 9.2% |
-| TabPFN-3.5 (research-only) | 0.16088 | 8.8% |
-| TabPFN v2 | 0.16219 | 8.0% |
-| XGBoost B′ | 0.16405 | 7.0% |
-| ELO baseline | 0.17633 | — |
+| Model | Brier ↓ | vs ELO | Accuracy [95% CI] | Δacc vs ELO (pp) | AUC |
+|---|---|---|---|---|---|
+| 0.5·C3 ensemble + 0.5·TabPFN-3.5 (research-only) | 0.15661 | 11.2% | 76.76% [76.10, 77.47] | +1.88 | 0.8527 |
+| 0.5·C3 ensemble + 0.5·TabPFN v2 | 0.15733 | 10.8% | 76.58% [75.88, 77.29] | +1.71 | 0.8513 |
+| 0.5·C3 ensemble + 0.5·XGBoost B′ | 0.15779 | 10.5% | 76.62% [75.95, 77.31] | +1.74 | 0.8505 |
+| (C3 ensemble + TabPFN v2 + XGBoost B′) / 3 | 0.15784 | 10.5% | 76.49% [75.80, 77.20] | +1.61 | 0.8505 |
+| 0.5·C3 (single seed) + 0.5·XGBoost B′ | 0.15798 | 10.4% | 76.44% [75.79, 77.15] | +1.56 | 0.8501 |
+| C3 — 5-seed ensemble | 0.15889 | 9.9% | 76.63% [75.98, 77.32] | +1.75 | 0.8484 |
+| C3 — enriched GRU (single seed) | 0.16009 | 9.2% | 76.14% [75.49, 76.82] | +1.26 | 0.8464 |
+| TabPFN-3.5 (research-only) | 0.16088 | 8.8% | 76.26% [75.57, 76.94] | +1.38 | 0.8450 |
+| TabPFN v2 | 0.16219 | 8.0% | 75.66% [74.98, 76.36] | +0.78 | 0.8425 |
+| XGBoost B′ | 0.16405 | 7.0% | 75.52% [74.85, 76.19] | +0.64 | 0.8387 |
+| ELO baseline | 0.17633 | — | 74.88% [74.18, 75.61] | — | 0.8246 |
+
+*Accuracy is computed over both perspectives of each match (threshold p > 0.5; an exact tie counts as half a point), with a by-match bootstrap 95% CI (2,000 resamples, seed 42). It is a coarse measure: the top models lie within about 0.5 pp and their CIs overlap, so Brier and AUC are what separate the models. Notebook 16, Step 6.*
 
 **Takeaway:** blending the GRU with a tabular model beats the GRU alone: the TabPFN v2 blend improves on
 the C3 ensemble by −0.00158 Brier (95% CI [−0.00240, −0.00075], better in 4 of 4 folds) and the XGBoost B′

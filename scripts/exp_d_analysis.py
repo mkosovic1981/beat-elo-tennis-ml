@@ -134,6 +134,36 @@ def brier_ci(p, y, boots):
     return ci(np.array([l[i].mean() for i in boots]))
 
 
+def acc_score(p, y):
+    """Per-row accuracy credit. Both perspectives of a match are rows, threshold p > 0.5; an exact tie (p == 0.5)
+    gets half a point, so the result does not depend on a tie-breaking convention."""
+    return np.where(p == 0.5, 0.5, ((p > 0.5) == (y == 1)).astype(float))
+
+
+def acc_ci(p, y, boots):
+    """Mean accuracy (both perspectives, ties = 0.5) with the same by-match bootstrap indices as brier_ci."""
+    a = acc_score(p, y)
+    return ci(np.array([a[i].mean() for i in boots]))
+
+
+def summary_table(pool, cols, labels, boots, ref='p_ELO'):
+    """One row per model: Brier [CI], % Brier vs ELO, accuracy [CI], delta accuracy vs ELO (pp), AUC. Sorted by Brier."""
+    y = pool.Label.values
+    b_ref = np.mean((pool[ref].values - y) ** 2)
+    a_ref = acc_score(pool[ref].values, y).mean()
+    rows = []
+    for c in cols:
+        p = pool[c].values
+        b, bl, bh = brier_ci(p, y, boots)
+        a, al, ah = acc_ci(p, y, boots)
+        rows.append({'Model': labels[c], 'Brier': np.mean((p - y) ** 2), 'Brier lo': bl, 'Brier hi': bh,
+                     '% Brier vs ELO': 100 * (1 - np.mean((p - y) ** 2) / b_ref),
+                     'Acc %': 100 * acc_score(p, y).mean(), 'Acc lo': 100 * al, 'Acc hi': 100 * ah,
+                     'dAcc pp': 100 * (acc_score(p, y).mean() - a_ref), 'AUC': roc_auc_score(y, p),
+                     'ties': int((p == 0.5).sum())})
+    return pd.DataFrame(rows).sort_values('Brier').reset_index(drop=True)
+
+
 def reliability(p, y, bins=10):
     """Equal-mass bins -> (mean predicted, observed rate)."""
     o = np.argsort(p, kind='stable')
