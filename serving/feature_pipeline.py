@@ -91,7 +91,7 @@ def build_player_log(raw_matches: pd.DataFrame) -> pd.DataFrame:
     """Long-format (one row per player per match) point-in-time feature log.
 
     `raw_matches` must contain `REQUIRED_RAW_COLS` (the exact grain returned by
-    both `scripts/export_data.mjs`'s SinglesMatches CTE and the private club
+    both `scripts/export_data.mjs`'s SinglesMatches CTE and the private league
     app's `ml-features-raw.php` endpoint (not part of this repo — see
     `data_source.py`'s `PhpRawMatchSource`) — WinnerEloAfter/LoserEloAfter are
     optional extras, kept if present but not required).

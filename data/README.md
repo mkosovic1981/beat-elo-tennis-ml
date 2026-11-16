@@ -6,12 +6,12 @@ documents how to regenerate it and what to expect.
 
 ## Exporter Tech
 
-The original plan was to reuse the club app's PHP export endpoint. **This
+The original plan was to reuse the league app's PHP export endpoint. **This
 machine has no local PHP/sqlsrv install** (checked during Phase P1 — `php` is
 not on PATH), so the exporter was implemented instead as a **Node.js script
 using the `mssql` package**: `scripts/export_data.mjs`. This keeps this repo
 fully self-contained (own `package.json`, own `node_modules/`, no dependency
-on any other codebase) and uses the same read-only DB credentials the club
+on any other codebase) and uses the same read-only DB credentials the league
 app's PHP endpoints use.
 
 The SQL itself mirrors the same CTEs, window functions, and filters the PHP

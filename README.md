@@ -66,8 +66,49 @@ result for LLM-derived text features).
 
 ## 2 Data
 
+### 2.1 Data collection
+
+**League structure.** Tenis Liga Split is a recreational league in Split, Croatia.
+Play is organised in *seasons* of about one calendar month (a few are longer); enrolment is
+organised around two periods per year (winter and summer). In every season players are placed
+in leagues by *tier* (nine tiers, 1 to 9, in this data) and, within a tier, in *groups* of
+typically five players (3 to 7; about 24 groups per season on average). Each group plays a
+round-robin: every player meets every other player of the group once per season, at a court
+agreed between the two. Singles are played in separate men's (`SM`) and women's (`SF`) leagues;
+doubles pairs have their own league types, and a Masters event (`MA`) is held separately. Players
+may also report *friendly* matches, which belong to no league. New players are placed in a tier
+by a league administrator. A match is decided over two or three sets, the third often being a 10-point match tiebreak; 26.6% of the singles matches in the July snapshot went to a third
+set and 17.0% were decided by a third-set tiebreak.
+
+**Entering results.** There is no official scorer. After a match, the players themselves enter
+the result through a web form of the league's website: the two players, the league, the court and the
+set scores; the form can also be used to announce a future match in the
+league calendar. The form applies automatic plausibility checks before saving (set scores of at
+most seven games, a winner who also wins the last set, no third set after a two-set win,
+admissible tiebreak and super-tiebreak scores, a court must be chosen). Friendly results may be
+reported only by a participant; ordinary users enter results for their own league. A saved result
+is written straight to the league database together with the identity of the reporting player;
+league administrators can delete or correct a wrongly entered result.
+
+**Official matches and W.O.** A match counts as *official* if it was played in a league (as
+opposed to a friendly). A match that was not played (walkover, W.O.) is registered by the same form
+with a stated reason, is stored as a 6:0, 6:0 win for the awarded player with a "not played" flag,
+and triggers a notification to the league committee. W.O. results count as wins in the league
+standings but are not matches actually played; they are excluded from this study's dataset, as are
+Masters, doubles and friendly matches (§2.2).
+
+**Export for research.** Analysis never touches the live system. A script in this repository
+(`scripts/export_data.mjs`) reads the relational database of the league through a read-only
+account and writes one raw row per match (results, league context and the league's own ELO
+ratings before and after the match) to a private location outside the repository. The raw
+file is then pseudonymised (`scripts/anonimiziraj.py`) before any feature engineering or modelling;
+the mapping between pseudonyms and real identifiers is kept private. Details and data-quality
+checks are in `data/README.md`.
+
+### 2.2 Dataset used
+
 Singles matches (`SM`/`SF` leagues) of Tenis Liga Split from 2017-05-01 onwards are exported from a
-read-only SQL Server database by `scripts/export_data.mjs` (details and data-quality findings in
+read-only relational database by `scripts/export_data.mjs` (details and data-quality findings in
 `data/README.md`). Masters, doubles pairs and friendly matches are excluded. Each match yields two
 rows, one per player perspective, with asymmetric features expressed as differences. The November
 snapshot is pseudonymized (identifiers replaced, birth year reduced to age; the mapping stays
@@ -87,6 +128,145 @@ Experiment C4 (July only) uses a side table of LLM-scored free-text player descr
 
 ## 3 Methods
 
+**Overview.** Figure 0 summarises the whole pipeline, from result entry to the model shown to
+players; the following subsections describe each stage.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, Segoe UI, sans-serif","fontSize":"15px","lineColor":"#64748b","primaryTextColor":"#0f172a"},"flowchart":{"curve":"basis","nodeSpacing":28,"rankSpacing":42}}}%%
+flowchart TD
+  subgraph S1["① DATA ENTRY"]
+    direction TB
+    A["Players enter results<br/>in the league web form"] --> B[("League database<br/>seasons · tiers · groups<br/>matches · sets")]
+    B <-->|"nightly rebuild"| C["League ELO system<br/>ELO before / after"]
+  end
+  subgraph S2["② RESEARCH EXPORT"]
+    direction TB
+    D["Read-only export"] --> F["Pseudonymisation<br/>IDs replaced · birth year → age"]
+    F --> G[("Research dataset<br/>never public")]
+  end
+  subgraph S3["③ FEATURE ENGINEERING · point-in-time, leakage-safe"]
+    direction LR
+    H["Match sequence<br/>last 24 matches per player<br/>set score · ELO · rest days · tier"]
+    I["Tabular features<br/>ELO diff · H2H · last-10 win rate<br/>career win rate · matches · age"]
+  end
+  subgraph S4["④ MODELS"]
+    direction LR
+    M1["GRU C3<br/>single · 5-seed ensemble"]
+    M2["XGBoost B′<br/>5 seeds"]
+    M3["TabPFN v2<br/>zero-shot"]
+    M4["TabPFN-3.5<br/>research-only"]
+    M0["ELO baseline<br/>raw · calibrated"]
+  end
+  M5{{"Fixed-weight blends<br/>0.5 GRU + 0.5 tabular"}}
+  subgraph S5["⑤ EVALUATION"]
+    direction TB
+    V1["4-fold walk-forward<br/>2020 → 2026 · 14,428 matches"] --> V3["Brier · AUC · accuracy<br/>paired bootstrap · symmetry"]
+  end
+  subgraph S6["⑥ SERVING"]
+    direction TB
+    P1["C3 → ONNX"] --> P2["Nightly precompute<br/>all player pairs · ONNX Runtime"] --> P4["AI win chance<br/>in the league app"]
+  end
+
+  B --> D
+  G --> H & I
+  H --> M1
+  I --> M1 & M2 & M3 & M4
+  M1 & M2 & M3 & M4 --> M5
+  M0 & M1 & M2 & M3 & M4 & M5 --> V1
+  M1 ==>|"raw C3 deployed"| P1
+
+  classDef entry fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0c4a6e
+  classDef export fill:#ecfccb,stroke:#65a30d,stroke-width:2px,color:#365314
+  classDef feat fill:#fef9c3,stroke:#ca8a04,stroke-width:2px,color:#713f12
+  classDef gru fill:#dbeafe,stroke:#1d4ed8,stroke-width:2.5px,color:#1e3a8a
+  classDef tab fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+  classDef research fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95,stroke-dasharray:5 3
+  classDef elo fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#334155
+  classDef blend fill:#d1fae5,stroke:#059669,stroke-width:2.5px,color:#064e3b
+  classDef evalc fill:#fce7f3,stroke:#db2777,stroke-width:2px,color:#831843
+  classDef serve fill:#1e3a8a,stroke:#1e3a8a,stroke-width:2px,color:#ffffff
+
+  class A,B entry
+  class C,M0 elo
+  class D,F,G export
+  class H,I feat
+  class M1 gru
+  class M2,M3 tab
+  class M4 research
+  class M5 blend
+  class V1,V3 evalc
+  class P1,P2,P4 serve
+
+  style S1 fill:#f0f9ff,stroke:#7dd3fc,stroke-width:1.5px
+  style S2 fill:#f7fee7,stroke:#bef264,stroke-width:1.5px
+  style S3 fill:#fefce8,stroke:#fde047,stroke-width:1.5px
+  style S4 fill:#f8fafc,stroke:#cbd5e1,stroke-width:1.5px
+  style S5 fill:#fdf2f8,stroke:#f9a8d4,stroke-width:1.5px
+  style S6 fill:#eff6ff,stroke:#93c5fd,stroke-width:1.5px
+```
+
+**Figure 0.** End-to-end pipeline: result entry in the league system, pseudonymised research
+export, point-in-time feature engineering, model families, walk-forward evaluation and serving of
+the raw C3 model.
+
+### 3.0 Baseline: the league's ELO system
+
+The reference model is the rating system already running in the league software, which is
+inherited and was not designed or modified in this study. The specification below is taken from
+the league software's ELO module itself. Ratings are stored per player and match (rating before
+and after) and regenerated from scratch every night by processing all rated matches in
+chronological order (by date, ties by match identifier). The rule is described in the notation of
+the Elo system (Elo, 1978).
+
+*Rated population and ordering.* Singles league matches are rated; friendly matches are not, and
+doubles pairs have no rating records. Walkover (W.O.) matches are excluded when matches are
+selected for rating, before they reach the calculator (a league rule), so they never affect any
+rating. All players share one pool; there is no separate rating per gender. Every player starts
+at $R_0=1400$, and $n_i$ is the number of rated matches player $i$ has already played (so $n=0$
+at the first match). Ratings are carried unrounded through the computation.
+
+*Expected score.* For players 1 and 2 with ratings $R_1,R_2$,
+
+$$E_1=\frac{1}{1+10^{(R_2-R_1)/400}},\qquad E_2=1-E_1.$$
+
+*Experience-dependent K.* Each player is updated with their own factor, not a shared one:
+
+$$K_i=\max\bigl(50,\;300-2.5\,n_i\bigr),$$
+
+i.e. 300 for a newcomer, decreasing linearly and reaching its floor of 50 at $n=100$.
+
+*Margin-dependent score.* The update does not use a binary result. The winner receives an actual
+score $S\in[0.5,1]$ determined by the total number of games in the first two sets, and the loser
+receives $1-S$ (Table C). A match decided in three sets (including a match tiebreak) gives
+$S=0.5$ to both players, i.e. both are updated as if the match had been even.
+
+**Table C.** Actual score of the winner, $S$, by total games in the first two sets.
+
+| Games in sets 1+2 | ≤12 | 13 | 14 | 15–16 | 17–18 | 19–20 | 21–22 | 23–24 | 25–26 | ≥27 | three sets |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| $S$ | 1.00 | 0.95 | 0.90 | 0.85 | 0.80 | 0.75 | 0.70 | 0.60 | 0.55 | 0.50 | 0.50 |
+
+*Update.*
+
+$$R_i' = R_i + K_i\,\bigl(S_i - E_i\bigr),$$
+
+computed from the ratings before the match and stored as the post-match rating.
+
+*Reliability rule.* A player is *reliable* if $n>5$. If exactly one of the two players is
+reliable, only the unreliable player's rating is updated and the reliable player's rating stays
+unchanged; otherwise both ratings are updated. Because the two players generally have different
+$K_i$, and because of this rule, the system is not zero-sum.
+
+*Validation.* Reproducing the formula match by match from the stored pre-match ratings agrees
+with the stored post-match ratings for 97.2% of 18,035 matches within $10^{-6}$ (98.2% within
+0.5 points). The remainder is due to the counter $n$, which in the league software also includes
+matches outside the research export (e.g. Masters), so $K$ differs for those players.
+
+Two consequences matter for the comparison. First, the rating is not trained to predict the
+binary outcome: it is updated towards a margin-based score, so the probability $E_1$ it implies
+need not be calibrated (§3.3). Second, the rating of a newcomer moves by up to 300 points in a
+single match, so early ratings are noisy; Table 1 reports ELO both raw and isotonic-calibrated.
+
 ### 3.1 Features and evaluation protocol
 
 Every feature is computed strictly as of the moment before the match, with SQL window functions or
@@ -101,7 +281,7 @@ perspectives, but not the trained models themselves (§3.4).
 $$\mathrm{BS}=\frac1N\sum_{i=1}^{N}(p_i-y_i)^2,$$
 
 with AUC and accuracy as secondary metrics. Accuracy is computed over both perspectives of each
-match; an exact tie ($p=0.5$) counts as half a point. ELO's probability is
+match; an exact tie ($p=0.5$) counts as half a point. ELO's probability (§3.0) is
 $p=1/(1+10^{-\Delta/400})$ with $\Delta$ the rating difference. Calibration is assessed by ECE
 (10 equal-mass bins) and the CORP decomposition $\mathrm{BS}=\mathrm{MCB}-\mathrm{DSC}+\mathrm{UNC}$
 (Dimitriadis et al., 2021).
@@ -363,7 +543,7 @@ in recreational matches, but is not a proven bound.
   second attempt.
 - **Pooled intervals ignore temporal dependence.** The match-level bootstrap treats matches as
   exchangeable and may be optimistic even when paired.
-- **Single club, four folds, about nine years**; fold-level conclusions rest on noisy slices.
+- **Single league, four folds, about nine years**; fold-level conclusions rest on noisy slices.
 - **TabPFN v2 context** is limited to 10k rows (about 41% of fold-4 training data).
 - **Fixed blend weights** are untuned; a tuned weight would need its own validation fold.
 - **TabPFN-3.5** is non-commercial; its results and blends containing it are reference points only.
@@ -547,12 +727,12 @@ engineering: it consumes two full match-history sequences per prediction rather 
 feature vector. The simpler XGBoost B′ (a single scikit-learn-style `predict` on ~40 scalar
 features, no sequence state) is statistically close on the July full dataset and would be easier to
 deploy; C3 won on the accuracy side of that tradeoff. The exported model has been used as a live
-player-comparison feature in the private club app the data comes from; that app is a separate,
+player-comparison feature in the private league app the data comes from; that app is a separate,
 private codebase and not part of this repo.
 
 ## Appendix E. Reproducing the results
 
-The repository is a standalone research project with its own dependencies (`requirements.txt` for the notebooks, `package.json` for the Node.js export scripts). It grew out of statistics work for the club-management app of a real recreational league, but every notebook and script reads only exported files under `data/`; nothing imports from outside this repository.
+The repository is a standalone research project with its own dependencies (`requirements.txt` for the notebooks, `package.json` for the Node.js export scripts). It grew out of statistics work for the league management app of a real recreational league, but every notebook and script reads only exported files under `data/`; nothing imports from outside this repository.
 
 ### Data export (Node.js, requires DB access)
 

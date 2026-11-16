@@ -6,13 +6,13 @@ Two concrete raw-match sources, both returning the SAME DataFrame shape
   - `SqlServerRawMatchSource` — direct SQL Server read (read-only creds from
     `scripts/db-config.json`), for LOCAL testing only. Mirrors the exact join
     shape of `scripts/export_data.mjs`'s SinglesMatches CTE and of the private
-    club app's `ml-features-raw.php` endpoint (not part of this repo).
+    league app's `ml-features-raw.php` endpoint (not part of this repo).
   - `PhpRawMatchSource` — HTTP GET against that same `ml-features-raw.php`
     endpoint (raw rows only, no server-side feature computation), for the
     PRODUCTION path (Vercel Python function → PHP → SQL Server, no direct DB
     access from Vercel).
 
-Roster fetch (`fetch_roster`) always goes through the club app's existing
+Roster fetch (`fetch_roster`) always goes through the league app's existing
 `igraci.php` endpoint over HTTP, regardless of which raw-match source is
 chosen — this reuses the already-vetted active/eligibility logic instead of
 re-deriving it, and is cheap enough (~1 request) that there is no local-SQL
@@ -34,7 +34,7 @@ RAW_MATCH_COLUMNS = [
     'W_Set1', 'W_Set2', 'W_Set3', 'L_Set1', 'L_Set2', 'L_Set3',
 ]
 
-# Identical join shape to the private club app's `ml-features-raw.php` endpoint
+# Identical join shape to the private league app's `ml-features-raw.php` endpoint
 # (unfiltered, single flat query, no window functions — that endpoint is
 # deliberately dumb, all feature logic lives in feature_pipeline.py instead).
 # Kept here too so the LOCAL SQL path never silently drifts from the PHP
@@ -107,11 +107,11 @@ class SqlServerRawMatchSource(RawMatchSource):
 
 
 class PhpRawMatchSource(RawMatchSource):
-    """PRODUCTION path. HTTP GET against the private club app's
+    """PRODUCTION path. HTTP GET against the private league app's
     `ml-features-raw.php` endpoint (raw rows only, no server-side feature
     computation — kept dumb on purpose so all feature logic lives in
     `feature_pipeline.py`, not duplicated in PHP). Same `x-api-key`
-    server-to-server auth pattern the club app's other Next.js → PHP proxy
+    server-to-server auth pattern the league app's other Next.js → PHP proxy
     routes use."""
 
     def __init__(self, api_url: str, api_key: str, timeout: int = 30):
@@ -134,10 +134,10 @@ class PhpRawMatchSource(RawMatchSource):
 
 def fetch_roster(api_url: str, api_key: str, min_official_matches: int = 1,
                   timeout: int = 30) -> list[dict]:
-    """FULL comparable singles roster via the club app's existing `igraci.php`
+    """FULL comparable singles roster via the league app's existing `igraci.php`
     endpoint — `IgracPar=0, OfficialMatches >= min_official_matches`.
     Deliberately does NOT filter on `AktivniSingl` (that field means "still
-    playing in the current season", not "eligible to be compared") — the club
+    playing in the current season", not "eligible to be compared") — the league
     app's player-comparison UI lets an admin pick ANY two players, including
     dormant ones (e.g. a player dormant for years but with a long official
     match history), so the precomputed matrix must cover every comparable player,

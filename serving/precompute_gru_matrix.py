@@ -9,16 +9,16 @@ Run (production shape, PHP raw-data endpoint):
     python -m serving.precompute_gru_matrix --source php
 
 Pipeline (runs on a Vercel Cron-triggered Vercel Python function in the
-private club app; this module is imported unchanged by both the local CLI
+private league app; this module is imported unchanged by both the local CLI
 entrypoint below and that cron function):
 
-  1. Fetch the FULL comparable singles roster via the club app's `igraci.php`
+  1. Fetch the FULL comparable singles roster via the league app's `igraci.php`
      endpoint (IgracPar=0, OfficialMatches >= 1 — no AktivniSingl filter, no
      reliability floor, since the app's player-comparison UI lets an admin
      pick any two comparable players) — reuses the existing, already-vetted
      `igraci.php` projection instead of re-deriving it.
   2. Fetch the FULL raw singles match log (SM/SF, non-WO) — either directly
-     from SQL Server (`--source sql`, local dev only) or via the club app's
+     from SQL Server (`--source sql`, local dev only) or via the league app's
      `ml-features-raw.php` endpoint (`--source php`, the production shape;
      not part of this repo).
   3. Build the point-in-time player log + step-feature array via the SHARED
