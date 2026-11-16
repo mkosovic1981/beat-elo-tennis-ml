@@ -224,7 +224,7 @@ Question: can a pretrained tabular foundation model — **TabPFN v2**, used pure
 **no training or fine-tuning** — match the purpose-built GRU? The training matches (the most recent 10,000
 rows, or a random 10,000 for comparison) are given to the model as context, and it predicts the test
 matches in a single forward pass. v2 limits the context to ~10k rows; using the most recent 10k worked
-better than a random 10k. Predictions are symmetrized over both players' perspectives and isotonic-calibrated.
+better than a random 10k. TabPFN predictions are exactly symmetric over both players' perspectives (swapping A and B gives 1 minus the probability) and isotonic-calibrated; the GRU and XGBoost outputs are not symmetrized (see Step 7 of `notebooks/16_blend_gru_tabular.ipynb`).
 
 | Model (new snapshot, main split) | Brier ↓ | Paired ΔBrier vs ELO (95% CI) | Paired ΔBrier vs C3 (95% CI) |
 |---|---|---|---|
@@ -248,14 +248,14 @@ v2. Full analysis, including breakdowns by gender and by length of absence, in
 
 **As above, these numbers are on the newer anonymized snapshot (split 2025-06-06), not the July 2026
 one, so they are not comparable with the tables in the first sections.** Same protocol as Exp D (v2):
-no training, the most recent training rows as in-context data, symmetrized over both players'
+no training, the most recent training rows as in-context data, exactly symmetric over both players'
 perspectives, isotonic calibration, paired bootstrap per match (2,000 resamples, seed 42). Walk-forward,
 4 expanding folds, pooled over 14,428 test matches (Brier, 95% CI; ΔBrier is paired vs C3):
 
 | Model | Brier ↓ | ΔBrier vs C3 |
 |---|---|---|
-| C3 — 5-seed ensemble | 0.15889 [0.15549, 0.16220] | −0.00120 [−0.00166, −0.00074] |
-| C3 — enriched GRU (single seed) | 0.16009 [0.15665, 0.16350] | — |
+| C3 — 5-seed ensemble (calibrated) | 0.15889 [0.15549, 0.16220] | −0.00120 [−0.00166, −0.00074] |
+| C3 — enriched GRU (single seed, calibrated) | 0.16009 [0.15665, 0.16350] | — |
 | **TabPFN-3.5 (B′ features, full context)** | **0.16088** [0.15756, 0.16422] | +0.00074 [−0.00106, +0.00245] |
 | TabPFN v2 (B′ features, 10k context) | 0.16219 [0.15890, 0.16551] | +0.00207 [+0.00029, +0.00379] |
 | ELO baseline | 0.17633 [0.17369, 0.17891] | +0.01623 [+0.01424, +0.01819] |
@@ -280,19 +280,26 @@ matches pooled). The percentage is the Brier reduction relative to ELO (0.17633)
 
 | Model | Brier ↓ | vs ELO | Accuracy [95% CI] | Δacc vs ELO (pp) | AUC |
 |---|---|---|---|---|---|
-| 0.5·C3 ensemble + 0.5·TabPFN-3.5 (research-only) | 0.15661 | 11.2% | 76.76% [76.10, 77.47] | +1.88 | 0.8527 |
-| 0.5·C3 ensemble + 0.5·TabPFN v2 | 0.15733 | 10.8% | 76.58% [75.88, 77.29] | +1.71 | 0.8513 |
-| 0.5·C3 ensemble + 0.5·XGBoost B′ | 0.15779 | 10.5% | 76.62% [75.95, 77.31] | +1.74 | 0.8505 |
-| (C3 ensemble + TabPFN v2 + XGBoost B′) / 3 | 0.15784 | 10.5% | 76.49% [75.80, 77.20] | +1.61 | 0.8505 |
-| 0.5·C3 (single seed) + 0.5·XGBoost B′ | 0.15798 | 10.4% | 76.44% [75.79, 77.15] | +1.56 | 0.8501 |
-| C3 — 5-seed ensemble | 0.15889 | 9.9% | 76.63% [75.98, 77.32] | +1.75 | 0.8484 |
-| C3 — enriched GRU (single seed) | 0.16009 | 9.2% | 76.14% [75.49, 76.82] | +1.26 | 0.8464 |
+| 0.5·C3 ensemble (calibrated) + 0.5·TabPFN-3.5 (research-only) | 0.15661 | 11.2% | 76.76% [76.10, 77.47] | +1.88 | 0.8527 |
+| 0.5·C3 ensemble (calibrated) + 0.5·TabPFN v2 | 0.15733 | 10.8% | 76.58% [75.88, 77.29] | +1.71 | 0.8513 |
+| 0.5·C3 ensemble raw + 0.5·XGBoost B′ | 0.15774 | 10.5% | 76.65% [75.99, 77.35] | +1.77 | 0.8507 |
+| 0.5·C3 ensemble (calibrated) + 0.5·XGBoost B′ | 0.15779 | 10.5% | 76.62% [75.95, 77.31] | +1.74 | 0.8505 |
+| (C3 ensemble (calibrated) + TabPFN v2 + XGBoost B′) / 3 | 0.15784 | 10.5% | 76.49% [75.80, 77.20] | +1.61 | 0.8505 |
+| 0.5·C3 (single seed, calibrated) + 0.5·XGBoost B′ | 0.15798 | 10.4% | 76.44% [75.79, 77.15] | +1.56 | 0.8501 |
+| C3 ensemble raw (5 seeds, no isotonic) | 0.15847 [0.15515, 0.16164] | 10.1% | 76.60% [75.94, 77.29] | +1.73 | 0.8491 |
+| C3 — 5-seed ensemble (calibrated) | 0.15889 | 9.9% | 76.63% [75.98, 77.32] | +1.75 | 0.8484 |
+| C3 raw (production, no isotonic) | 0.15940 [0.15605, 0.16263] | 9.6% | 76.33% [75.67, 77.01] | +1.45 | 0.8474 |
+| C3 — enriched GRU (single seed, calibrated) | 0.16009 | 9.2% | 76.14% [75.49, 76.82] | +1.26 | 0.8464 |
 | TabPFN-3.5 (research-only) | 0.16088 | 8.8% | 76.26% [75.57, 76.94] | +1.38 | 0.8450 |
 | TabPFN v2 | 0.16219 | 8.0% | 75.66% [74.98, 76.36] | +0.78 | 0.8425 |
 | XGBoost B′ | 0.16405 | 7.0% | 75.52% [74.85, 76.19] | +0.64 | 0.8387 |
 | ELO baseline | 0.17633 | — | 74.88% [74.18, 75.61] | — | 0.8246 |
 
+*Production uses raw C3 (no isotonic step) since November 2026, because raw is slightly better pooled (0.15940 vs 0.16009). In the blend, XGBoost B′ stays calibrated.*
+
 *Accuracy is computed over both perspectives of each match (threshold p > 0.5; an exact tie counts as half a point), with a by-match bootstrap 95% CI (2,000 resamples, seed 42). It is a coarse measure: the top models lie within about 0.5 pp and their CIs overlap, so Brier and AUC are what separate the models. Notebook 16, Step 6.*
+
+**Symmetry check (Step 7).** ELO and TabPFN are exactly symmetric (p_AB + p_BA = 1). The GRU and XGBoost are not: mean |p_AB + p_BA − 1| is 0.0164 for C3 raw (max 0.166), 0.0077 for C3 ensemble raw, 0.0357 for XGBoost B′ (max 0.259) and 0.0183 for the 0.5/0.5 blend. Symmetrizing with p_sym = (p_AB + 1 − p_BA) / 2 changes Brier negligibly (blend −0.00017, XGBoost −0.00065).
 
 **Takeaway:** blending the GRU with a tabular model beats the GRU alone: the TabPFN v2 blend improves on
 the C3 ensemble by −0.00158 Brier (95% CI [−0.00240, −0.00075], better in 4 of 4 folds) and the XGBoost B′
@@ -302,7 +309,7 @@ Adding both tabular models at once does not help, because their residuals are hi
 On identical 37 features TabPFN v2 is significantly better than XGBoost B′ (−0.00186 [−0.00305, −0.00070]).
 
 *The TabPFN-3.5 blend is research-only (TabPFN-3.5 Non-Commercial License, Prior Labs); it is shown for
-comparison and is not a candidate for any deployed system. Production currently uses Exp C3.* Details:
+comparison and is not a candidate for any deployed system. Production uses Exp C3 (raw).* Details:
 `notebooks/16_blend_gru_tabular.ipynb`.
 
 ## Serving
@@ -313,6 +320,9 @@ an ONNX graph with a numerically verified parity check (pack-free rewrite vs. or
 Runtime vs. PyTorch, both to float tolerance), and `precompute_gru_matrix.py` is a batch job that
 precomputes a full pairwise win-probability matrix for every comparable player in the active
 roster — so serving a prediction at request time is a lookup, not a per-request GRU inference call.
+The isotonic calibrator (`serving/models/exp_c3_isotonic.pkl`) is kept in the repo, but the current
+private production uses the raw sigmoid output (no isotonic step), since raw is slightly better pooled
+(Brier 0.15940 vs 0.16009; see "Blending the GRU with tabular models").
 
 Exp C3 was picked for serving *because* it's the strongest model in this project on every
 point-estimate metric, not despite the extra engineering the two-tower GRU requires (see "Serving
@@ -556,7 +566,7 @@ committed separately as static PNGs under `models/`:
 │   ├── precompute_gru_matrix.py # batch job — precomputes pairwise win-probabilities for the full player roster
 │   └── models/
 │       ├── exp_c3.onnx           # exported Exp C3 model graph
-│       ├── exp_c3_isotonic.pkl   # calibration model (isotonic regression)
+│       ├── exp_c3_isotonic.pkl   # calibration model (isotonic regression); kept, but current production uses raw sigmoid
 │       └── exp_c3_scaling.json   # feature scaling stats + hyperparameters + test metrics
 └── models/                      # committed chart PNGs (the large trained *.pkl/*.pt model
                                   # artifacts are gitignored — regenerable from training, see below)

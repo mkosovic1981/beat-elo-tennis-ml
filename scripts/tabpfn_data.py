@@ -16,7 +16,7 @@ Feature sets (same as notebooks 07 / 09, plan 2.3):
   B'      = experiment_b_cols (28, with elo_diff) + 9 trajectory diffs     (37)
   B'-par  = B' without MATCH-CONTEXT columns (league / season-size / razina-vs-league features, gender flag).
             These do not exist for an arbitrary player pair A vs B in the nightly 250k-pair precompute, so
-            this is the only variant that can go to production (plan 2.5). h2h_total_before is a property
+            this is the only variant computable for an arbitrary player pair. h2h_total_before is a property
             of the pair, so it stays.  ASSUMPTION - confirm with the architect if the context list differs.
 """
 import json

@@ -39,14 +39,18 @@ def load_folds(workdir):
     out = {}
     for k in sorted(dp):
         c5 = pd.read_parquet(D / f'c5_preds_fold{k}.parquet')
-        b = c5[K + ['Datum', 'Label', 'liga_tip', '_rest_days_p', 'p_C3_calibrated']].rename(columns={'p_C3_calibrated': 'p_C3'})
+        b = c5[K + ['Datum', 'Label', 'liga_tip', '_rest_days_p', 'p_C3_calibrated', 'p_C3_raw']].rename(columns={'p_C3_calibrated': 'p_C3', 'p_C3_raw': 'p_C3raw'})
         b = b.merge(feat[K + ['p_ELO']], on=K, how='left')
         ps = [c5.set_index(K)['p_C3_calibrated']]
+        pr = [c5.set_index(K)['p_C3_raw']]
         for s in (1, 2, 3, 4):
             p = D / f'c5_preds_fold{k}_seed{s}.parquet'
             if p.exists():
-                ps.append(pd.read_parquet(p).set_index(K)['p_C3_calibrated'])
+                sd = pd.read_parquet(p).set_index(K)
+                ps.append(sd['p_C3_calibrated'])
+                pr.append(sd['p_C3_raw'])
         b = b.merge(pd.concat(ps, axis=1).mean(axis=1).rename('p_C3ens'), left_on=K, right_index=True)
+        b = b.merge(pd.concat(pr, axis=1).mean(axis=1).rename('p_C3ens_raw'), left_on=K, right_index=True)
         for key, s in dp[k].items():
             if key != '_meta':
                 b = b.merge(s.rename('p_' + key), left_on=K, right_index=True, how='left')
@@ -188,6 +192,7 @@ def add_blends(B, v2='p_D-Bprime__last10k__s42', v35='p_d35_full'):
     """Add fixed-weight blend columns in place (weights chosen in advance -- nothing is fitted on test data).
     Needs p_C3, p_C3ens, p_xgb, v2 (and v35 for the research-only blend). Returns {column: label}."""
     for k, d in B.items():
+        d['b_C3ens_raw_xgb'] = 0.5 * d.p_C3ens_raw + 0.5 * d.p_xgb  # raw GRU ensemble + XGB B' (calibrated)
         d['b_C3_xgb'] = 0.5 * d.p_C3 + 0.5 * d.p_xgb
         d['b_C3ens_xgb'] = 0.5 * d.p_C3ens + 0.5 * d.p_xgb
         d['b_C3_v2'] = 0.5 * d.p_C3 + 0.5 * d[v2]
@@ -195,6 +200,21 @@ def add_blends(B, v2='p_D-Bprime__last10k__s42', v35='p_d35_full'):
         d['b_3way'] = (d.p_C3ens + d[v2] + d.p_xgb) / 3
         if v35 in d:
             d['b_C3ens_v35'] = 0.5 * d.p_C3ens + 0.5 * d[v35]
-    return {'b_C3_xgb': '0.5 C3 + 0.5 XGB', 'b_C3ens_xgb': '0.5 C3ens + 0.5 XGB', 'b_C3_v2': '0.5 C3 + 0.5 TabPFN v2',
+    return {'b_C3ens_raw_xgb': '0.5 C3ens raw + 0.5 XGB', 'b_C3_xgb': '0.5 C3 + 0.5 XGB', 'b_C3ens_xgb': '0.5 C3ens + 0.5 XGB', 'b_C3_v2': '0.5 C3 + 0.5 TabPFN v2',
             'b_C3ens_v2': '0.5 C3ens + 0.5 TabPFN v2', 'b_3way': '(C3ens + v2 + XGB) / 3',
             'b_C3ens_v35': '0.5 C3ens + 0.5 TabPFN-3.5 (research-only)'}
+
+
+def pair_dev(pool, col):
+    """Per match: p(perspective A) + p(perspective B) - 1. Zero for a model that is symmetric under swapping the players."""
+    p = pool.pivot_table(index='SusretId', columns='Perspective', values=col)
+    c = list(p.columns)
+    return (p[c[0]] + p[c[1]] - 1).abs()
+
+
+def symmetrize(pool, col):
+    """Symmetrised probability p_sym = (p_AB + 1 - p_BA) / 2, returned row-aligned with `pool`."""
+    p = pool.pivot_table(index='SusretId', columns='Perspective', values=col)
+    c = list(p.columns)
+    s = pool.SusretId.map((p[c[0]] + 1 - p[c[1]]) / 2)
+    return s.where(pool.Perspective == c[0], 1 - s).values
