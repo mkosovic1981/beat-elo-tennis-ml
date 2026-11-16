@@ -7,10 +7,17 @@ reg_alpha=0.1, reg_lambda=1.0, learning_rate=0.05, up to 500 trees with early st
 seed 42. Per fold the train matches are cut chronologically like `carve_train` (last 15 % = isotonic calibration slice,
 then last 10 % of the rest = early-stopping slice, remainder = core). Isotonic calibration on the calibration slice.
 
-Usage:  python scripts/run_walkforward_xgb_bprime.py <workdir>      (or env GDSI_ML_WORKDIR)
-Reads:  <workdir>/data (features.parquet, feature_tags.json, ...)   Writes: <workdir>/exp_xgb/test_predictions_xgb_bprime_fold<k>.parquet
+Variants (--variant):
+  Bprime      the 37 B' features (default)                      -> test_predictions_xgb_bprime_fold<k>.parquet
+  Bprime_par  B' without the 8 match-context columns (29)       -> test_predictions_xgb_bprimepar_fold<k>.parquet
+              (the pair-only variant: computable for any player pair without match context; the same column set
+              as TabPFN D-Bprime-par, see tabpfn_data.CONTEXT_COLS)
+
+Usage:  python scripts/run_walkforward_xgb_bprime.py <workdir> [--variant Bprime|Bprime_par]   (or env GDSI_ML_WORKDIR)
+Reads:  <workdir>/data (features.parquet, feature_tags.json, ...)   Writes: <workdir>/exp_xgb/
 Contains no data; predictions stay in the (untracked) workdir.
 """
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -21,6 +28,10 @@ from sklearn.calibration import CalibratedClassifierCV
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tabpfn_data as td  # noqa: E402
 
+VARIANTS = {  # variant -> (COLS key, output file stem, prediction column)
+    'Bprime': ('B_PRIME', 'xgb_bprime', 'p_cal_Bprime_xgb'),
+    'Bprime_par': ('B_PRIME_PAR', 'xgb_bprimepar', 'p_cal_Bprimepar_xgb'),
+}
 PARAMS = {'max_depth': 4, 'reg_alpha': 0.1, 'reg_lambda': 1.0, 'learning_rate': 0.05}
 SEED = 42
 
@@ -36,12 +47,13 @@ def carve(match_order, train_ids, calib_frac=0.15, early_stop_frac=0.10):
     return set(fit.iloc[:nf - n_eval]['SusretId']), set(fit.iloc[nf - n_eval:]['SusretId']), calib
 
 
-def main(workdir):
+def main(workdir, variant='Bprime'):
     ds = td.load_tabpfn_dataset(workdir)
-    sym, cols, mo = ds['sym'], ds['COLS']['B_PRIME'], ds['match_order']
+    sym, cols, mo = ds['sym'], ds['COLS'][VARIANTS[variant][0]], ds['match_order']
+    stem, pcol = VARIANTS[variant][1:]
     out_dir = Path(workdir) / 'exp_xgb'
     out_dir.mkdir(exist_ok=True)
-    print(len(cols), 'features')
+    print(variant, len(cols), 'features')
     for f in ds['FOLDS']:
         k = f['fold']
         core, ev, calib = carve(mo, f['train_ids'])
@@ -54,14 +66,17 @@ def main(workdir):
             sym.loc[m(calib), cols], sym.loc[m(calib), 'Label'])
         te = sym[m(f['test_ids'])]
         res = te[['SusretId', 'Datum', 'PlayerId', 'OpponentId', 'Label', 'Perspective']].copy()
-        res['p_cal_Bprime_xgb'] = cal.predict_proba(te[cols])[:, 1]
-        res.to_parquet(out_dir / f'test_predictions_xgb_bprime_fold{k}.parquet')
+        res[pcol] = cal.predict_proba(te[cols])[:, 1]
+        res.to_parquet(out_dir / f'test_predictions_{stem}_fold{k}.parquet')
         print(f'fold {k}: {len(res)} rows, best_iteration {model.best_iteration}, '
-              f'Brier {((res.p_cal_Bprime_xgb - res.Label) ** 2).mean():.5f}')
+              f'Brier {((res[pcol] - res.Label) ** 2).mean():.5f}')
 
 
 if __name__ == '__main__':
-    wd = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('GDSI_ML_WORKDIR')
-    if not wd:
-        sys.exit('usage: run_walkforward_xgb_bprime.py <workdir> (or env GDSI_ML_WORKDIR)')
-    main(wd)
+    ap = argparse.ArgumentParser()
+    ap.add_argument('workdir', nargs='?', default=os.environ.get('GDSI_ML_WORKDIR'))
+    ap.add_argument('--variant', choices=sorted(VARIANTS), default='Bprime')
+    a = ap.parse_args()
+    if not a.workdir:
+        sys.exit('usage: run_walkforward_xgb_bprime.py <workdir> [--variant Bprime|Bprime_par] (or env GDSI_ML_WORKDIR)')
+    main(a.workdir, a.variant)

@@ -176,15 +176,17 @@ def reliability(p, y, bins=10):
 
 
 # ---------------------------------------------------------------- notebook 16 (GRU + tabular blends)
-def add_xgb(B, workdir):
-    """Join XGBoost B' predictions (<workdir>/exp_xgb, from run_walkforward_xgb_bprime.py) into the fold frames, in place.
-    Adds p_xgb (folds 1-4)."""
+def add_xgb(B, workdir, variant='Bprime'):
+    """Join XGBoost predictions (<workdir>/exp_xgb, from run_walkforward_xgb_bprime.py) into the fold frames, in place.
+    variant 'Bprime' adds p_xgb, variant 'Bprime_par' (no match-context columns) adds p_xgbpar (folds 1-4)."""
+    stem, pcol, name = {'Bprime': ('xgb_bprime', 'p_cal_Bprime_xgb', 'p_xgb'),
+                        'Bprime_par': ('xgb_bprimepar', 'p_cal_Bprimepar_xgb', 'p_xgbpar')}[variant]
     E = Path(workdir) / 'exp_xgb'
     for k in B:
-        df = pd.read_parquet(E / f'test_predictions_xgb_bprime_fold{k}.parquet')
+        df = pd.read_parquet(E / f'test_predictions_{stem}_fold{k}.parquet')
         assert not df.duplicated(K).any()
-        B[k] = B[k].merge(df.set_index(K)['p_cal_Bprime_xgb'].rename('p_xgb'), left_on=K, right_index=True, how='left')
-        assert B[k]['p_xgb'].notna().all()
+        B[k] = B[k].merge(df.set_index(K)[pcol].rename(name), left_on=K, right_index=True, how='left')
+        assert B[k][name].notna().all()
     return B
 
 
@@ -218,3 +220,22 @@ def symmetrize(pool, col):
     c = list(p.columns)
     s = pool.SusretId.map((p[c[0]] + 1 - p[c[1]]) / 2)
     return s.where(pool.Perspective == c[0], 1 - s).values
+
+
+# ---------------------------------------------------------------- notebook 17 (pair-only tabular partner)
+def add_blends_par(B):
+    """Blends with the pair-only XGBoost (p_xgbpar, needs add_xgb(..., 'Bprime_par')) plus their symmetrised versions
+    (p_sym = (p_AB + 1 - p_BA) / 2, per fold). Fixed 0.5 / 0.5 weights, nothing fitted on test data.
+    Returns {column: label}."""
+    for k, d in B.items():
+        d['b_C3ensraw_xgbpar'] = 0.5 * d.p_C3ens_raw + 0.5 * d.p_xgbpar
+        d['b_C3raw_xgbpar'] = 0.5 * d.p_C3raw + 0.5 * d.p_xgbpar
+        d['b_C3ensraw_xgb'] = 0.5 * d.p_C3ens_raw + 0.5 * d.p_xgb
+        for c in ('b_C3ensraw_xgbpar', 'b_C3raw_xgbpar', 'b_C3ensraw_xgb', 'p_xgbpar', 'p_xgb'):
+            d[c + '_sym'] = symmetrize(d, c)
+    return {'b_C3ensraw_xgbpar': "0.5 C3ens raw + 0.5 XGB B'-par", 'b_C3raw_xgbpar': "0.5 C3 raw + 0.5 XGB B'-par",
+            'b_C3ensraw_xgb': "0.5 C3ens raw + 0.5 XGB B'", 'p_xgbpar': "XGBoost B'-par", 'p_xgb': "XGBoost B'",
+            'b_C3ensraw_xgbpar_sym': "0.5 C3ens raw + 0.5 XGB B'-par (symmetrised)",
+            'b_C3raw_xgbpar_sym': "0.5 C3 raw + 0.5 XGB B'-par (symmetrised)",
+            'b_C3ensraw_xgb_sym': "0.5 C3ens raw + 0.5 XGB B' (symmetrised)",
+            'p_xgbpar_sym': "XGBoost B'-par (symmetrised)", 'p_xgb_sym': "XGBoost B' (symmetrised)"}
